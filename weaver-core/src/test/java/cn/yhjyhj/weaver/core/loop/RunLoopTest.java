@@ -14,6 +14,8 @@ import cn.yhjyhj.weaver.core.model.ModelRequest;
 import cn.yhjyhj.weaver.core.model.StreamChunk;
 import cn.yhjyhj.weaver.core.model.StreamSink;
 import cn.yhjyhj.weaver.core.phase.Phase;
+import cn.yhjyhj.weaver.core.tool.Tool;
+import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Flow;
@@ -75,12 +77,19 @@ class RunLoopTest {
                         new StreamChunk.Text("done"),
                         new StreamChunk.Done(StreamChunk.StopReason.STOP))), null);
 
-        new RunLoop(model, store).run(SESSION_ID, "读取 x");
+        new RunLoop(model, store, fileRegistry()).run(SESSION_ID, "读取 x");
 
         assertTrue(events(store).contains(
                 new SessionEvent.ToolCallStarted("call-1", "file", "read x")));
-        assertTrue(events(store).contains(new SessionEvent.ToolCallCompleted(
-                "call-1", new ToolResult("ok", false, 0L))));
+        SessionEvent.ToolCallCompleted completed = events(store).stream()
+                .filter(SessionEvent.ToolCallCompleted.class::isInstance)
+                .map(SessionEvent.ToolCallCompleted.class::cast)
+                .findFirst()
+                .orElseThrow();
+        assertEquals("call-1", completed.callId());
+        assertEquals("ok", completed.result().content());
+        assertFalse(completed.result().isError());
+        assertTrue(completed.result().durationMs() >= 0L);
         assertEquals(List.of(
                 new SessionSnapshot.Message(SessionEvent.Role.USER, "读取 x"),
                 new SessionSnapshot.Message(SessionEvent.Role.ASSISTANT, "checking"),
@@ -100,7 +109,7 @@ class RunLoopTest {
                         new StreamChunk.Text("done"),
                         new StreamChunk.Done(StreamChunk.StopReason.STOP))), null);
 
-        new RunLoop(model, store).run(SESSION_ID, "读取 x");
+        new RunLoop(model, store, fileRegistry()).run(SESSION_ID, "读取 x");
 
         assertEquals(List.of(
                 new SessionEvent.MessageAdded(SessionEvent.Role.ASSISTANT, "done")),
@@ -234,6 +243,20 @@ class RunLoopTest {
                 .map(SessionEvent.MessageAdded.class::cast)
                 .filter(message -> message.role() == SessionEvent.Role.ASSISTANT)
                 .toList();
+    }
+
+    private static ToolRegistry fileRegistry() {
+        return new ToolRegistry(List.of(new Tool() {
+            @Override
+            public String name() {
+                return "file";
+            }
+
+            @Override
+            public ToolResult execute(String argumentsJson) {
+                return new ToolResult("ok", false, 0L);
+            }
+        }));
     }
 
     private static Flow.Publisher<StreamChunk> publisherOf(StreamChunk... chunks) {

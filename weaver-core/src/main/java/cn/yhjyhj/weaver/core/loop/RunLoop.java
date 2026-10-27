@@ -11,6 +11,7 @@ import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.model.StreamChunk;
 import cn.yhjyhj.weaver.core.model.StreamSink;
 import cn.yhjyhj.weaver.core.phase.Phase;
+import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** 直线驱动单步策略链的运行循环。 */
@@ -38,6 +39,7 @@ public final class RunLoop {
     private final SessionEventStore store; // 会话事实源
     private final int maxSteps; // 本次运行允许执行的最大步数
     private final StreamSink streamSink; // 模型文本与工具调用的实时输出出口
+    private final ToolRegistry toolRegistry; // 本循环可执行的工具集合
     /** 当前运行是否收到取消请求；每次 run 开始时重置。 */
     private final AtomicBoolean cancelled = new AtomicBoolean();
     /** 最近一次运行收敛后的阶段；run 返回后由调用线程读取。 */
@@ -50,7 +52,18 @@ public final class RunLoop {
      * @param store 会话事件存储
      */
     public RunLoop(ModelClient model, SessionEventStore store) {
-        this(model, store, DEFAULT_MAX_STEPS);
+        this(model, store, DEFAULT_MAX_STEPS, NO_OP_STREAM_SINK, ToolRegistry.empty());
+    }
+
+    /**
+     * 使用默认步数上限和指定工具注册表创建运行循环。
+     *
+     * @param model 模型调用边界
+     * @param store 会话事件存储
+     * @param toolRegistry 工具注册表
+     */
+    public RunLoop(ModelClient model, SessionEventStore store, ToolRegistry toolRegistry) {
+        this(model, store, DEFAULT_MAX_STEPS, NO_OP_STREAM_SINK, toolRegistry);
     }
 
     /**
@@ -61,7 +74,23 @@ public final class RunLoop {
      * @param maxSteps 单轮最大步数
      */
     public RunLoop(ModelClient model, SessionEventStore store, int maxSteps) {
-        this(model, store, maxSteps, NO_OP_STREAM_SINK);
+        this(model, store, maxSteps, NO_OP_STREAM_SINK, ToolRegistry.empty());
+    }
+
+    /**
+     * 创建具有指定步数上限和工具注册表的运行循环。
+     *
+     * @param model 模型调用边界
+     * @param store 会话事件存储
+     * @param maxSteps 单轮最大步数
+     * @param toolRegistry 工具注册表
+     */
+    public RunLoop(
+            ModelClient model,
+            SessionEventStore store,
+            int maxSteps,
+            ToolRegistry toolRegistry) {
+        this(model, store, maxSteps, NO_OP_STREAM_SINK, toolRegistry);
     }
 
     /**
@@ -77,10 +106,29 @@ public final class RunLoop {
             SessionEventStore store,
             int maxSteps,
             StreamSink streamSink) {
+        this(model, store, maxSteps, streamSink, ToolRegistry.empty());
+    }
+
+    /**
+     * 创建具有指定步数上限、实时输出出口和工具注册表的运行循环。
+     *
+     * @param model 模型调用边界
+     * @param store 会话事件存储
+     * @param maxSteps 单轮最大步数
+     * @param streamSink 模型文本与工具调用的实时输出出口
+     * @param toolRegistry 工具注册表
+     */
+    public RunLoop(
+            ModelClient model,
+            SessionEventStore store,
+            int maxSteps,
+            StreamSink streamSink,
+            ToolRegistry toolRegistry) {
         this.model = model;
         this.store = store;
         this.maxSteps = maxSteps;
         this.streamSink = streamSink;
+        this.toolRegistry = toolRegistry;
     }
 
     /**
@@ -95,7 +143,7 @@ public final class RunLoop {
         EventSink sink = event -> store.append(sessionId, event);
         sink.emit(new SessionEvent.MessageAdded(SessionEvent.Role.USER, input));
         StrategyHandler<RunRequest, RunContext, StepResult> root =
-                RunChainFactory.assemble(store, model);
+                RunChainFactory.assemble(store, model, toolRegistry);
         Phase.Running phase = Phase.idle().start();
         boolean aborted = false;
 

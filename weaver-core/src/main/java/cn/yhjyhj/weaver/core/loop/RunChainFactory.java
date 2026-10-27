@@ -11,6 +11,7 @@ import cn.yhjyhj.weaver.core.loop.node.IntentNode;
 import cn.yhjyhj.weaver.core.loop.node.ObserveNode;
 import cn.yhjyhj.weaver.core.loop.node.ReasonNode;
 import cn.yhjyhj.weaver.core.model.ModelClient;
+import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 
 /** 在运行时装配 Context、Intent、Reason、Act、Observe 五节点链。 */
 public final class RunChainFactory {
@@ -28,8 +29,21 @@ public final class RunChainFactory {
      */
     public static StrategyHandler<RunRequest, RunContext, StepResult> assemble(
             SessionEventStore store, ModelClient model) {
+        return assemble(store, model, ToolRegistry.empty());
+    }
+
+    /**
+     * 使用给定工具注册表装配单步 ReAct 策略链。
+     *
+     * @param store 会话事件存储
+     * @param model 模型调用边界
+     * @param registry 工具注册表
+     * @return 策略链入口
+     */
+    public static StrategyHandler<RunRequest, RunContext, StepResult> assemble(
+            SessionEventStore store, ModelClient model, ToolRegistry registry) {
         ObserveNode observe = new ObserveNode();
-        ActNode act = new ActNode(observe);
+        ActNode act = new ActNode(registry, observe);
         ReasonNode reason = new ReasonNode(model, act, observe);
         IntentNode intent = new IntentNode(reason);
         return new ContextNode(store, intent, reason);
