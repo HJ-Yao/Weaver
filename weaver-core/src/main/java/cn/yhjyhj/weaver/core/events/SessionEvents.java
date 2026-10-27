@@ -1,9 +1,9 @@
 package cn.yhjyhj.weaver.core.events;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 纯函数折叠器：把事件流重放成会话快照。
@@ -18,7 +18,7 @@ public final class SessionEvents {
     public static SessionSnapshot replay(Iterable<StoredEvent> events) {
         List<SessionSnapshot.Message> messages = new ArrayList<>();
         List<SessionSnapshot.ToolCallRecord> toolCalls = new ArrayList<>();
-        Deque<String> pendingArgs = new ArrayDeque<>();
+        Map<String, SessionEvent.ToolCallStarted> pendingToolCalls = new HashMap<>();
         boolean aborted = false;
         long lastSeq = 0L;
 
@@ -28,12 +28,14 @@ public final class SessionEvents {
             if (e instanceof SessionEvent.MessageAdded m) {
                 messages.add(new SessionSnapshot.Message(m.role(), m.content()));
             } else if (e instanceof SessionEvent.ToolCallStarted t) {
-                pendingArgs.addLast(t.argsSummary());
+                pendingToolCalls.put(t.callId(), t);
             } else if (e instanceof SessionEvent.ToolCallCompleted c) {
-                // M1 线性执行：按开始顺序配对同名工具的调用。
-                String args = pendingArgs.pollFirst();
+                SessionEvent.ToolCallStarted started = pendingToolCalls.remove(c.callId());
                 toolCalls.add(new SessionSnapshot.ToolCallRecord(
-                        c.toolName(), args == null ? "" : args, c.resultSummary()));
+                        c.callId(),
+                        started == null ? "unknown" : started.toolName(),
+                        started == null ? "" : started.argumentsJson(),
+                        c.result()));
             } else if (e instanceof SessionEvent.RunFinished f) {
                 aborted = f.aborted();
             }

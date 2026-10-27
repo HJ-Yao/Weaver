@@ -23,14 +23,82 @@ class SessionEventFoldingTest {
     @Test
     void replayPairsToolCallStartWithCompletion() {
         var events = List.of(
-                new StoredEvent(1L, new SessionEvent.ToolCallStarted("shell", "git status")),
-                new StoredEvent(2L, new SessionEvent.ToolCallCompleted("shell", "nothing to commit")));
+                new StoredEvent(1L, new SessionEvent.ToolCallStarted(
+                        "call-1", "shell", "{\"command\":\"git status\"}")),
+                new StoredEvent(2L, new SessionEvent.ToolCallCompleted(
+                        "call-1", new ToolResult("nothing to commit", false, 12L))));
         var snapshot = SessionEvents.replay(events);
         assertEquals(1, snapshot.toolCalls().size());
         var call = snapshot.toolCalls().get(0);
+        assertEquals("call-1", call.callId());
         assertEquals("shell", call.toolName());
-        assertEquals("git status", call.argsSummary());
-        assertEquals("nothing to commit", call.resultSummary());
+        assertEquals("{\"command\":\"git status\"}", call.argumentsJson());
+        assertEquals(new ToolResult("nothing to commit", false, 12L), call.result());
+    }
+
+    @Test
+    void replayPairsOutOfOrderCompletionsByCallId() {
+        var events = List.of(
+                new StoredEvent(1L, new SessionEvent.ToolCallStarted(
+                        "call-a", "read", "{\"path\":\"a.txt\"}")),
+                new StoredEvent(2L, new SessionEvent.ToolCallStarted(
+                        "call-b", "search", "{\"query\":\"weaver\"}")),
+                new StoredEvent(3L, new SessionEvent.ToolCallCompleted(
+                        "call-b", new ToolResult("search result", false, 30L))),
+                new StoredEvent(4L, new SessionEvent.ToolCallCompleted(
+                        "call-a", new ToolResult("read result", true, 7L))));
+
+        var snapshot = SessionEvents.replay(events);
+
+        assertEquals(List.of(
+                new SessionSnapshot.ToolCallRecord(
+                        "call-b",
+                        "search",
+                        "{\"query\":\"weaver\"}",
+                        new ToolResult("search result", false, 30L)),
+                new SessionSnapshot.ToolCallRecord(
+                        "call-a",
+                        "read",
+                        "{\"path\":\"a.txt\"}",
+                        new ToolResult("read result", true, 7L))),
+                snapshot.toolCalls());
+    }
+
+    @Test
+    void replayPreservesRawArgumentsJson() {
+        String argumentsJson = "{\"text\":\"line one\\nline two\",\"flags\":[true,null]}";
+        var events = List.of(
+                new StoredEvent(1L, new SessionEvent.ToolCallStarted(
+                        "call-raw", "echo", argumentsJson)),
+                new StoredEvent(2L, new SessionEvent.ToolCallCompleted(
+                        "call-raw", new ToolResult(argumentsJson, false, 1L))));
+
+        var call = SessionEvents.replay(events).toolCalls().get(0);
+
+        assertEquals(argumentsJson, call.argumentsJson());
+        assertEquals(argumentsJson, call.result().content());
+    }
+
+    @Test
+    void replayUsesUnknownToolForOrphanCompletion() {
+        var events = List.of(new StoredEvent(1L, new SessionEvent.ToolCallCompleted(
+                "missing", new ToolResult("failed", true, 3L))));
+
+        var snapshot = assertDoesNotThrow(() -> SessionEvents.replay(events));
+
+        assertEquals(List.of(new SessionSnapshot.ToolCallRecord(
+                "missing", "unknown", "", new ToolResult("failed", true, 3L))),
+                snapshot.toolCalls());
+    }
+
+    @Test
+    void replayDoesNotProjectUncompletedToolCall() {
+        var events = List.of(new StoredEvent(1L, new SessionEvent.ToolCallStarted(
+                "call-pending", "shell", "{\"command\":\"sleep 10\"}")));
+
+        var snapshot = SessionEvents.replay(events);
+
+        assertTrue(snapshot.toolCalls().isEmpty());
     }
 
     @Test
@@ -44,8 +112,10 @@ class SessionEventFoldingTest {
     void replayIsIdempotentForSameEventStream() {
         var events = List.of(
                 new StoredEvent(1L, new SessionEvent.MessageAdded(SessionEvent.Role.USER, "hi")),
-                new StoredEvent(2L, new SessionEvent.ToolCallStarted("shell", "ls")),
-                new StoredEvent(3L, new SessionEvent.ToolCallCompleted("shell", "ok")),
+                new StoredEvent(2L, new SessionEvent.ToolCallStarted(
+                        "call-1", "shell", "{\"command\":\"ls\"}")),
+                new StoredEvent(3L, new SessionEvent.ToolCallCompleted(
+                        "call-1", new ToolResult("ok", false, 2L))),
                 new StoredEvent(4L, new SessionEvent.RunFinished(false)));
         assertEquals(SessionEvents.replay(events), SessionEvents.replay(events));
     }

@@ -16,11 +16,11 @@ public sealed interface SessionEvent
     /** 一条消息进入会话。 */
     record MessageAdded(Role role, String content) implements SessionEvent {}
 
-    /** 一次工具调用开始（记录名称与参数摘要）。 */
-    record ToolCallStarted(String toolName, String argsSummary) implements SessionEvent {}
+    /** 模型要求调用工具：保留 callId、工具名与模型给出的原始参数 JSON。 */
+    record ToolCallStarted(String callId, String toolName, String argumentsJson) implements SessionEvent {}
 
-    /** 一次工具调用结束（记录名称与结果摘要）。 */
-    record ToolCallCompleted(String toolName, String resultSummary) implements SessionEvent {}
+    /** 工具执行完成：按 callId 关联到对应的开始事件。 */
+    record ToolCallCompleted(String callId, ToolResult result) implements SessionEvent {}
 
     /** 一次运行结束；aborted 为 true 表示被中止而非自然结束。 */
     record RunFinished(boolean aborted) implements SessionEvent {}
