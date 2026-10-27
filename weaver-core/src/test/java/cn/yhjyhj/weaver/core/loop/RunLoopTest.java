@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import cn.yhjyhj.weaver.core.approval.ApprovalDecision;
+import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.SessionSnapshot;
@@ -26,6 +29,8 @@ import org.junit.jupiter.api.Test;
 class RunLoopTest {
 
     private static final String SESSION_ID = "session";
+    private static final ApprovalPolicy ALLOW_ALL =
+            (call, reversibility) -> ApprovalDecision.ALLOW; // 执行型测试显式绕过审批
 
     @Test
     void recordsUserAndAssistantMessagesThenFinishesNaturally() {
@@ -77,7 +82,13 @@ class RunLoopTest {
                         new StreamChunk.Text("done"),
                         new StreamChunk.Done(StreamChunk.StopReason.STOP))), null);
 
-        new RunLoop(model, store, fileRegistry()).run(SESSION_ID, "读取 x");
+        new RunLoop(
+                        model,
+                        store,
+                        fileRegistry(),
+                        ALLOW_ALL,
+                        ApprovalGate.denyAll())
+                .run(SESSION_ID, "读取 x");
 
         assertTrue(events(store).contains(
                 new SessionEvent.ToolCallStarted("call-1", "file", "read x")));
@@ -109,11 +120,40 @@ class RunLoopTest {
                         new StreamChunk.Text("done"),
                         new StreamChunk.Done(StreamChunk.StopReason.STOP))), null);
 
-        new RunLoop(model, store, fileRegistry()).run(SESSION_ID, "读取 x");
+        new RunLoop(
+                        model,
+                        store,
+                        fileRegistry(),
+                        ALLOW_ALL,
+                        ApprovalGate.denyAll())
+                .run(SESSION_ID, "读取 x");
 
         assertEquals(List.of(
                 new SessionEvent.MessageAdded(SessionEvent.Role.ASSISTANT, "done")),
                 assistantMessages(store));
+    }
+
+    @Test
+    void deniesUnapprovedToolByDefaultWithoutUi() {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        ScriptedModelClient model = new ScriptedModelClient(List.of(
+                response(
+                        new StreamChunk.ToolCall("call-1", "file", "read x"),
+                        new StreamChunk.Done(StreamChunk.StopReason.STOP)),
+                response(
+                        new StreamChunk.Text("denied"),
+                        new StreamChunk.Done(StreamChunk.StopReason.STOP))), null);
+
+        new RunLoop(model, store, fileRegistry()).run(SESSION_ID, "读取 x");
+
+        SessionEvent.ToolCallCompleted completed = events(store).stream()
+                .filter(SessionEvent.ToolCallCompleted.class::isInstance)
+                .map(SessionEvent.ToolCallCompleted.class::cast)
+                .findFirst()
+                .orElseThrow();
+        assertEquals(new ToolResult("denied by user", true, 0L), completed.result());
+        assertTrue(events(store).contains(
+                new SessionEvent.ApprovalResolved("call-1", false, "user-denied")));
     }
 
     @Test

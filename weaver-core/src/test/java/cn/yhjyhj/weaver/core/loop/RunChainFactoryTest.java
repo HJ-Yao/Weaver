@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import cn.yhjyhj.weaver.core.approval.ApprovalDecision;
+import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.loop.context.RunContext;
@@ -13,6 +16,7 @@ import cn.yhjyhj.weaver.core.loop.node.ContextNode;
 import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.model.ModelRequest;
 import cn.yhjyhj.weaver.core.model.StreamChunk;
+import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Flow;
@@ -39,6 +43,27 @@ class RunChainFactoryTest {
                 new cn.yhjyhj.weaver.core.events.SessionSnapshot.Message(
                         SessionEvent.Role.USER, "earlier")),
                 model.requests.getFirst().history());
+    }
+
+    @Test
+    void assemblesChainWithExplicitApprovalDependencies() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        ScriptedModelClient model = new ScriptedModelClient(List.of(List.of(
+                new StreamChunk.Text("answer"),
+                new StreamChunk.Done(StreamChunk.StopReason.STOP))));
+        RunContext context = new RunContext("session", event -> store.append("session", event));
+        ApprovalPolicy policy = (call, reversibility) -> ApprovalDecision.ALLOW;
+
+        var chain = RunChainFactory.assemble(
+                store,
+                model,
+                ToolRegistry.empty(),
+                policy,
+                ApprovalGate.denyAll());
+        StepResult result = chain.apply(new RunRequest("session", "你好", 0), context);
+
+        assertTrue(result.finished());
+        assertEquals(1, model.requests.size());
     }
 
     private static final class ScriptedModelClient implements ModelClient {

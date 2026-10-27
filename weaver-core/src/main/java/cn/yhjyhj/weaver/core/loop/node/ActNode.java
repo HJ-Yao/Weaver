@@ -1,5 +1,9 @@
 package cn.yhjyhj.weaver.core.loop.node;
 
+import cn.yhjyhj.weaver.core.approval.ApprovalDecision;
+import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
+import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.ToolResult;
 import cn.yhjyhj.weaver.core.loop.chain.AbstractRunNode;
@@ -8,10 +12,12 @@ import cn.yhjyhj.weaver.core.loop.context.RunContext;
 import cn.yhjyhj.weaver.core.loop.context.RunRequest;
 import cn.yhjyhj.weaver.core.loop.context.StepResult;
 import cn.yhjyhj.weaver.core.model.StreamChunk;
+import cn.yhjyhj.weaver.core.tool.Reversibility;
 import cn.yhjyhj.weaver.core.tool.Tool;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -20,6 +26,9 @@ import java.util.concurrent.TimeUnit;
 
 /** 执行本步收集到的工具调用，并为每次调用记录开始与完成事实。 */
 public final class ActNode extends AbstractRunNode {
+
+    private final ApprovalPolicy approvalPolicy; // 计算每次调用的审批结论
+    private final ApprovalGate approvalGate; // 在 ASK 时阻塞等待用户答复
 
     private final ToolRegistry registry; // 按模型工具名查找执行实例
 
@@ -32,24 +41,68 @@ public final class ActNode extends AbstractRunNode {
     public ActNode(
             ToolRegistry registry,
             StrategyHandler<RunRequest, RunContext, StepResult> observeNode) {
+        this(
+                registry,
+                observeNode,
+                RuleBasedApprovalPolicy.defaults(),
+                ApprovalGate.denyAll());
+    }
+
+    /**
+     * 创建带审批控制的工具执行节点。
+     *
+     * @param registry 工具注册表
+     * @param observeNode 工具执行完成后进入的结果收敛节点
+     * @param approvalPolicy 工具调用审批策略
+     * @param approvalGate ASK 时等待用户答复的闸门
+     */
+    public ActNode(
+            ToolRegistry registry,
+            StrategyHandler<RunRequest, RunContext, StepResult> observeNode,
+            ApprovalPolicy approvalPolicy,
+            ApprovalGate approvalGate) {
         super(observeNode);
-        this.registry = registry;
+        this.registry = Objects.requireNonNull(registry, "registry");
+        this.approvalPolicy = Objects.requireNonNull(approvalPolicy, "approvalPolicy");
+        this.approvalGate = Objects.requireNonNull(approvalGate, "approvalGate");
     }
 
     @Override
     protected StepResult doApply(RunRequest request, RunContext context) {
         List<StreamChunk.ToolCall> calls = List.copyOf(context.getPendingToolCalls());
-        for (StreamChunk.ToolCall call : calls) {
+        List<Tool> tools = calls.stream()
+                .map(call -> registry.find(call.toolName()).orElse(null))
+                .toList();
+        List<ToolResult> results = new ArrayList<>(calls.size());
+        for (int index = 0; index < calls.size(); index++) {
+            results.add(null);
+        }
+        boolean[] approved = new boolean[calls.size()];
+
+        for (int index = 0; index < calls.size(); index++) {
+            StreamChunk.ToolCall call = calls.get(index);
+            Reversibility reversibility = reversibilityOf(tools.get(index));
+            ApprovalDecision decision = approvalPolicy.decide(call, reversibility);
+            approved[index] = approve(call, reversibility, decision, context);
+            if (!approved[index]) {
+                String deniedBy = decision == ApprovalDecision.DENY ? "policy" : "user";
+                results.set(index, new ToolResult("denied by " + deniedBy, true, 0L));
+            }
             context.getSink().emit(new SessionEvent.ToolCallStarted(
                     call.callId(), call.toolName(), call.argumentsJson()));
         }
 
-        List<Tool> tools = calls.stream()
-                .map(call -> registry.find(call.toolName()).orElse(null))
-                .toList();
-        List<ToolResult> results = shouldExecuteInParallel(calls, tools)
-                ? executeInParallel(calls, tools)
-                : executeSerially(calls, tools);
+        List<Integer> executable = executableCallIndexes(tools, approved);
+        if (shouldExecuteInParallel(tools, executable)) {
+            executeInParallel(calls, tools, executable, results);
+        } else {
+            executeSerially(calls, tools, executable, results);
+        }
+        for (int index = 0; index < calls.size(); index++) {
+            if (approved[index] && tools.get(index) == null) {
+                results.set(index, unknownTool(calls.get(index)));
+            }
+        }
 
         // 并行完成顺序不影响事实顺序；结果始终按模型给出的调用顺序落库。
         for (int index = 0; index < calls.size(); index++) {
@@ -62,44 +115,86 @@ public final class ActNode extends AbstractRunNode {
         return null;
     }
 
-    private boolean shouldExecuteInParallel(List<StreamChunk.ToolCall> calls, List<Tool> tools) {
-        if (calls.size() <= 1) {
+    private boolean approve(
+            StreamChunk.ToolCall call,
+            Reversibility reversibility,
+            ApprovalDecision decision,
+            RunContext context) {
+        if (decision == ApprovalDecision.ALLOW) {
+            return true;
+        }
+
+        context.getSink().emit(new SessionEvent.ApprovalRequested(
+                call.callId(), call.toolName(), reversibility));
+        if (decision == ApprovalDecision.DENY) {
+            context.getSink().emit(
+                    new SessionEvent.ApprovalResolved(call.callId(), false, "policy"));
             return false;
         }
-        // 未知工具没有并行能力声明，保守退化为串行；任一已知工具拒绝并行也会退化。
-        return tools.stream().allMatch(tool -> tool != null && tool.parallelizable());
+
+        boolean approved = approvalGate.requestApproval(call, reversibility);
+        context.getSink().emit(new SessionEvent.ApprovalResolved(
+                call.callId(), approved, approved ? "user" : "user-denied"));
+        return approved;
     }
 
-    private List<ToolResult> executeSerially(
-            List<StreamChunk.ToolCall> calls, List<Tool> tools) {
-        List<ToolResult> results = new ArrayList<>(calls.size());
-        for (int index = 0; index < calls.size(); index++) {
-            results.add(executeOne(calls.get(index), tools.get(index)));
+    private static Reversibility reversibilityOf(Tool tool) {
+        if (tool == null) {
+            return Reversibility.IRREVERSIBLE;
         }
-        return results;
+        Reversibility reversibility = tool.reversibility();
+        // 工具返回空声明时不能获得更宽松的审批待遇。
+        return reversibility == null ? Reversibility.IRREVERSIBLE : reversibility;
     }
 
-    private List<ToolResult> executeInParallel(
-            List<StreamChunk.ToolCall> calls, List<Tool> tools) {
+    private static List<Integer> executableCallIndexes(List<Tool> tools, boolean[] approved) {
+        List<Integer> indexes = new ArrayList<>();
+        for (int index = 0; index < tools.size(); index++) {
+            if (approved[index] && tools.get(index) != null) {
+                indexes.add(index);
+            }
+        }
+        return indexes;
+    }
+
+    private boolean shouldExecuteInParallel(List<Tool> tools, List<Integer> executable) {
+        if (executable.size() <= 1) {
+            return false;
+        }
+        return executable.stream().allMatch(index -> tools.get(index).parallelizable());
+    }
+
+    private void executeSerially(
+            List<StreamChunk.ToolCall> calls,
+            List<Tool> tools,
+            List<Integer> executable,
+            List<ToolResult> results) {
+        for (int index : executable) {
+            results.set(index, executeOne(calls.get(index), tools.get(index)));
+        }
+    }
+
+    private void executeInParallel(
+            List<StreamChunk.ToolCall> calls,
+            List<Tool> tools,
+            List<Integer> executable,
+            List<ToolResult> results) {
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            List<Future<ToolResult>> futures = new ArrayList<>(calls.size());
-            for (int index = 0; index < calls.size(); index++) {
-                int taskIndex = index;
+            List<Future<ToolResult>> futures = new ArrayList<>(executable.size());
+            for (int index : executable) {
                 futures.add(executor.submit(
-                        () -> executeOne(calls.get(taskIndex), tools.get(taskIndex))));
+                        () -> executeOne(calls.get(index), tools.get(index))));
             }
 
-            List<ToolResult> results = new ArrayList<>(calls.size());
-            for (Future<ToolResult> future : futures) {
-                results.add(await(future));
+            for (int offset = 0; offset < executable.size(); offset++) {
+                results.set(executable.get(offset), await(futures.get(offset)));
             }
-            return results;
         }
     }
 
     private ToolResult executeOne(StreamChunk.ToolCall call, Tool tool) {
         if (tool == null) {
-            return new ToolResult("unknown tool: " + call.toolName(), true, 0L);
+            return unknownTool(call);
         }
 
         long startedAt = System.nanoTime();
@@ -115,6 +210,10 @@ public final class ActNode extends AbstractRunNode {
             return new ToolResult(
                     "tool execution failed: " + exception.getMessage(), true, durationMs);
         }
+    }
+
+    private static ToolResult unknownTool(StreamChunk.ToolCall call) {
+        return new ToolResult("unknown tool: " + call.toolName(), true, 0L);
     }
 
     private ToolResult await(Future<ToolResult> future) {

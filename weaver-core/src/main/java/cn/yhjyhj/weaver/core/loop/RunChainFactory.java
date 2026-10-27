@@ -1,5 +1,8 @@
 package cn.yhjyhj.weaver.core.loop;
 
+import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
+import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.loop.chain.StrategyHandler;
 import cn.yhjyhj.weaver.core.loop.context.RunContext;
@@ -42,8 +45,32 @@ public final class RunChainFactory {
      */
     public static StrategyHandler<RunRequest, RunContext, StepResult> assemble(
             SessionEventStore store, ModelClient model, ToolRegistry registry) {
+        return assemble(
+                store,
+                model,
+                registry,
+                RuleBasedApprovalPolicy.defaults(),
+                ApprovalGate.denyAll());
+    }
+
+    /**
+     * 使用显式审批依赖装配单步 ReAct 策略链。
+     *
+     * @param store 会话事件存储
+     * @param model 模型调用边界
+     * @param registry 工具注册表
+     * @param approvalPolicy 工具调用审批策略
+     * @param approvalGate ASK 时等待用户答复的闸门
+     * @return 策略链入口
+     */
+    public static StrategyHandler<RunRequest, RunContext, StepResult> assemble(
+            SessionEventStore store,
+            ModelClient model,
+            ToolRegistry registry,
+            ApprovalPolicy approvalPolicy,
+            ApprovalGate approvalGate) {
         ObserveNode observe = new ObserveNode();
-        ActNode act = new ActNode(registry, observe);
+        ActNode act = new ActNode(registry, observe, approvalPolicy, approvalGate);
         ReasonNode reason = new ReasonNode(model, act, observe);
         IntentNode intent = new IntentNode(reason);
         return new ContextNode(store, intent, reason);

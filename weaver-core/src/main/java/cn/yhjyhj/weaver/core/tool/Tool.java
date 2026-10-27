@@ -28,4 +28,13 @@ public interface Tool {
     default boolean parallelizable() {
         return true;
     }
+
+    /**
+     * 返回工具操作的可回滚程度。
+     *
+     * @return 默认为不可回滚，工具实现必须显式声明更高可回滚性
+     */
+    default Reversibility reversibility() {
+        return Reversibility.IRREVERSIBLE;
+    }
 }

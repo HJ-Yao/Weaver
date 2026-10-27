@@ -1,5 +1,6 @@
 package cn.yhjyhj.weaver.core.events;
 
+import cn.yhjyhj.weaver.core.tool.Reversibility;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -124,6 +125,30 @@ class SessionEventFoldingTest {
         var events = List.of(new StoredEvent(1L, new SessionEvent.RunFinished(true)));
         assertTrue(SessionEvents.replay(events).aborted());
         assertFalse(SessionEvents.replay(List.of(new StoredEvent(1L, new SessionEvent.RunFinished(false)))).aborted());
+    }
+
+    @Test
+    void replayPairsToolCallsAcrossApprovalAuditEvents() {
+        var events = List.of(
+                new StoredEvent(1L, new SessionEvent.ToolCallStarted(
+                        "call-1", "shell", "status")),
+                new StoredEvent(2L, new SessionEvent.ApprovalRequested(
+                        "call-1", "shell", Reversibility.RECOVERABLE)),
+                new StoredEvent(3L, new SessionEvent.ApprovalResolved(
+                        "call-1", true, "user")),
+                new StoredEvent(4L, new SessionEvent.ToolCallCompleted(
+                        "call-1", new ToolResult("ok", false, 3L))));
+
+        var snapshot = SessionEvents.replay(events);
+
+        assertEquals(List.of(new SessionSnapshot.ToolCallRecord(
+                "call-1",
+                "shell",
+                "status",
+                new ToolResult("ok", false, 3L))), snapshot.toolCalls());
+        assertEquals(
+                new SessionSnapshot.Message(SessionEvent.Role.TOOL, "ok"),
+                snapshot.messages().getFirst());
     }
 
     @Test

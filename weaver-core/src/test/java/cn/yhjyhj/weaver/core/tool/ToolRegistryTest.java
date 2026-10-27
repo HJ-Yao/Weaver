@@ -40,6 +40,11 @@ class ToolRegistryTest {
         assertTrue(tool("file").parallelizable());
     }
 
+    @Test
+    void defaultsToIrreversibleOperations() {
+        assertSame(Reversibility.IRREVERSIBLE, tool("file").reversibility());
+    }
+
     private static Tool tool(String name) {
         return new Tool() {
             @Override
