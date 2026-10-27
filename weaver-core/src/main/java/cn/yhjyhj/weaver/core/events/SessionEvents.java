@@ -36,6 +36,9 @@ public final class SessionEvents {
                         started == null ? "unknown" : started.toolName(),
                         started == null ? "" : started.argumentsJson(),
                         c.result()));
+                // 工具结果也是下一轮模型可消费的事实，按完成顺序进入消息历史。
+                messages.add(new SessionSnapshot.Message(
+                        SessionEvent.Role.TOOL, c.result().content()));
             } else if (e instanceof SessionEvent.RunFinished f) {
                 aborted = f.aborted();
             }

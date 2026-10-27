@@ -11,7 +11,14 @@ public sealed interface SessionEvent
                 SessionEvent.ToolCallCompleted, SessionEvent.RunFinished {
 
     /** 消息角色。 */
-    enum Role { USER, ASSISTANT }
+    enum Role {
+        /** 用户输入。 */
+        USER,
+        /** 模型响应。 */
+        ASSISTANT,
+        /** 工具执行结果。 */
+        TOOL
+    }
 
     /** 一条消息进入会话。 */
     record MessageAdded(Role role, String content) implements SessionEvent {}

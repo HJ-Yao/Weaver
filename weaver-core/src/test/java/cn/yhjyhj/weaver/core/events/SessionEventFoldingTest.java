@@ -37,6 +37,24 @@ class SessionEventFoldingTest {
     }
 
     @Test
+    void replayAddsCompletedToolResultAsToolMessage() {
+        var events = List.of(
+                new StoredEvent(1L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.USER, "read file")),
+                new StoredEvent(2L, new SessionEvent.ToolCallStarted(
+                        "call-1", "file", "{\"path\":\"a.txt\"}")),
+                new StoredEvent(3L, new SessionEvent.ToolCallCompleted(
+                        "call-1", new ToolResult("ok", false, 2L))));
+
+        var snapshot = SessionEvents.replay(events);
+
+        assertEquals(List.of(
+                new SessionSnapshot.Message(SessionEvent.Role.USER, "read file"),
+                new SessionSnapshot.Message(SessionEvent.Role.TOOL, "ok")),
+                snapshot.messages());
+    }
+
+    @Test
     void replayPairsOutOfOrderCompletionsByCallId() {
         var events = List.of(
                 new StoredEvent(1L, new SessionEvent.ToolCallStarted(

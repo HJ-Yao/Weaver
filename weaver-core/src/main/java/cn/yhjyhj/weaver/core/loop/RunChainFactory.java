@@ -1,0 +1,37 @@
+package cn.yhjyhj.weaver.core.loop;
+
+import cn.yhjyhj.weaver.core.events.SessionEventStore;
+import cn.yhjyhj.weaver.core.loop.chain.StrategyHandler;
+import cn.yhjyhj.weaver.core.loop.context.RunContext;
+import cn.yhjyhj.weaver.core.loop.context.RunRequest;
+import cn.yhjyhj.weaver.core.loop.context.StepResult;
+import cn.yhjyhj.weaver.core.loop.node.ActNode;
+import cn.yhjyhj.weaver.core.loop.node.ContextNode;
+import cn.yhjyhj.weaver.core.loop.node.IntentNode;
+import cn.yhjyhj.weaver.core.loop.node.ObserveNode;
+import cn.yhjyhj.weaver.core.loop.node.ReasonNode;
+import cn.yhjyhj.weaver.core.model.ModelClient;
+
+/** 在运行时装配 Context、Intent、Reason、Act、Observe 五节点链。 */
+public final class RunChainFactory {
+
+    private RunChainFactory() {}
+
+    /**
+     * 装配单步 ReAct 策略链。
+     *
+     * <p>首步由 Context 进入 Intent；工具回灌后的步骤由 Context 直接进入 Reason。
+     *
+     * @param store 会话事件存储
+     * @param model 模型调用边界
+     * @return 策略链入口
+     */
+    public static StrategyHandler<RunRequest, RunContext, StepResult> assemble(
+            SessionEventStore store, ModelClient model) {
+        ObserveNode observe = new ObserveNode();
+        ActNode act = new ActNode(observe);
+        ReasonNode reason = new ReasonNode(model, act, observe);
+        IntentNode intent = new IntentNode(reason);
+        return new ContextNode(store, intent, reason);
+    }
+}
