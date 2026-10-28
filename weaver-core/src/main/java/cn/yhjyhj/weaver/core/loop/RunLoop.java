@@ -18,7 +18,12 @@ import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 
-/** 直线驱动单步策略链的运行循环。 */
+/**
+ * 直线驱动单步策略链的运行循环。
+ *
+ * <p>线程契约：一个实例同一时间只应执行一个 {@link #run(String, String)}；
+ * 并发会话请各自创建实例。{@link #cancel()} 可以从其他线程调用。
+ */
 @Slf4j
 public final class RunLoop {
 

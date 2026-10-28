@@ -1,5 +1,7 @@
 package cn.yhjyhj.weaver.core.events;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -53,5 +55,37 @@ class InMemorySessionEventStoreTest {
         store.append("s1", new SessionEvent.RunFinished(false));
         assertEquals(2L, store.lastSeq("s1"));
         assertEquals(0L, store.lastSeq("unknown"));
+    }
+
+    @Test
+    void concurrentAppendsPreserveEveryEventInSequenceOrder() throws Exception {
+        for (int round = 0; round < 25; round++) {
+            var store = new InMemorySessionEventStore();
+            String sessionId = "concurrent-" + round;
+            CountDownLatch start = new CountDownLatch(1);
+
+            try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+                for (int thread = 0; thread < 8; thread++) {
+                    executor.submit(
+                            () -> {
+                                start.await();
+                                for (int append = 0; append < 100; append++) {
+                                    store.append(
+                                            sessionId,
+                                            new SessionEvent.RunFinished(false));
+                                }
+                                return null;
+                            });
+                }
+                start.countDown();
+            }
+
+            var stored = store.from(sessionId, 0L);
+            assertEquals(800, stored.size());
+            for (int index = 0; index < stored.size(); index++) {
+                assertEquals(index + 1L, stored.get(index).seq());
+            }
+            assertEquals(800L, store.lastSeq(sessionId));
+        }
     }
 }
