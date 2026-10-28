@@ -21,7 +21,27 @@ public interface Tool {
     ToolResult execute(String argumentsJson);
 
     /**
-     * 返回是否允许与其他工具并行执行。
+     * 按本次原始参数返回工具操作的回滚程度。
+     *
+     * @param argumentsJson 模型给出的原始参数 JSON
+     * @return 本次调用的回滚性；默认回退到无参声明
+     */
+    default Reversibility reversibility(String argumentsJson) {
+        return reversibility();
+    }
+
+    /**
+     * 按本次原始参数返回工具是否允许与其他工具并行执行。
+     *
+     * @param argumentsJson 模型给出的原始参数 JSON
+     * @return 本次调用是否可并行；默认回退到无参声明
+     */
+    default boolean parallelizable(String argumentsJson) {
+        return parallelizable();
+    }
+
+    /**
+     * 返回不带参数上下文时是否允许并行执行。
      *
      * @return 默认允许并行
      */
@@ -30,9 +50,9 @@ public interface Tool {
     }
 
     /**
-     * 返回工具操作的可回滚程度。
+     * 返回不带参数上下文时的回滚程度。
      *
-     * @return 默认为不可回滚，工具实现必须显式声明更高可回滚性
+     * @return 默认不可回滚
      */
     default Reversibility reversibility() {
         return Reversibility.IRREVERSIBLE;

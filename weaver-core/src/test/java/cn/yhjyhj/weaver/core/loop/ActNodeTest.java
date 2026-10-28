@@ -245,6 +245,74 @@ class ActNodeTest {
     }
 
     @Test
+    void usesArgumentsWhenDecidingToolReversibility() throws Exception {
+        AtomicReference<Reversibility> approvedReversibility = new AtomicReference<>();
+        Tool file = new Tool() {
+            @Override
+            public String name() {
+                return "file";
+            }
+
+            @Override
+            public ToolResult execute(String argumentsJson) {
+                return new ToolResult("done", false, 0L);
+            }
+
+            @Override
+            public Reversibility reversibility(String argumentsJson) {
+                return argumentsJson.contains("write")
+                        ? Reversibility.RECOVERABLE
+                        : Reversibility.REVERSIBLE;
+            }
+        };
+
+        execute(
+                new ToolRegistry(List.of(file)),
+                (call, reversibility) -> ApprovalDecision.ASK,
+                (call, reversibility) -> {
+                    approvedReversibility.set(reversibility);
+                    return true;
+                },
+                new StreamChunk.ToolCall(
+                        "call-1", "file", "{\"op\":\"write\",\"path\":\"a.txt\"}"));
+
+        assertEquals(Reversibility.RECOVERABLE, approvedReversibility.get());
+    }
+
+    @Test
+    void usesArgumentsWhenDecidingToolParallelism() throws Exception {
+        AtomicInteger active = new AtomicInteger();
+        AtomicInteger maxActive = new AtomicInteger();
+        Tool file = new Tool() {
+            @Override
+            public String name() {
+                return "file";
+            }
+
+            @Override
+            public ToolResult execute(String argumentsJson) {
+                int current = active.incrementAndGet();
+                maxActive.accumulateAndGet(current, Math::max);
+                pause(50L);
+                active.decrementAndGet();
+                return new ToolResult(argumentsJson, false, 0L);
+            }
+
+            @Override
+            public boolean parallelizable(String argumentsJson) {
+                return argumentsJson.contains("read");
+            }
+        };
+
+        execute(
+                new ToolRegistry(List.of(file)),
+                new StreamChunk.ToolCall("call-1", "file", "{\"op\":\"read\"}"),
+                new StreamChunk.ToolCall("call-2", "file", "{\"op\":\"write\"}"));
+
+        assertEquals(1, maxActive.get());
+    }
+
+    @Test
     void emitsAllStartsBeforeCompletionsInOriginalOrder() throws Exception {
         CountDownLatch secondCompleted = new CountDownLatch(1);
         Tool first = tool("first", true, argumentsJson -> {

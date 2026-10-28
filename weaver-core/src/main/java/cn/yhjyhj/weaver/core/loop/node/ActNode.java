@@ -81,7 +81,8 @@ public final class ActNode extends AbstractRunNode {
 
         for (int index = 0; index < calls.size(); index++) {
             StreamChunk.ToolCall call = calls.get(index);
-            Reversibility reversibility = reversibilityOf(tools.get(index));
+            Reversibility reversibility =
+                    reversibilityOf(tools.get(index), call.argumentsJson());
             ApprovalDecision decision = approvalPolicy.decide(call, reversibility);
             approved[index] = approve(call, reversibility, decision, context);
             if (!approved[index]) {
@@ -93,7 +94,7 @@ public final class ActNode extends AbstractRunNode {
         }
 
         List<Integer> executable = executableCallIndexes(tools, approved);
-        if (shouldExecuteInParallel(tools, executable)) {
+        if (shouldExecuteInParallel(calls, tools, executable)) {
             executeInParallel(calls, tools, executable, results);
         } else {
             executeSerially(calls, tools, executable, results);
@@ -138,11 +139,11 @@ public final class ActNode extends AbstractRunNode {
         return approved;
     }
 
-    private static Reversibility reversibilityOf(Tool tool) {
+    private static Reversibility reversibilityOf(Tool tool, String argumentsJson) {
         if (tool == null) {
             return Reversibility.IRREVERSIBLE;
         }
-        Reversibility reversibility = tool.reversibility();
+        Reversibility reversibility = tool.reversibility(argumentsJson);
         // 工具返回空声明时不能获得更宽松的审批待遇。
         return reversibility == null ? Reversibility.IRREVERSIBLE : reversibility;
     }
@@ -157,11 +158,16 @@ public final class ActNode extends AbstractRunNode {
         return indexes;
     }
 
-    private boolean shouldExecuteInParallel(List<Tool> tools, List<Integer> executable) {
+    private boolean shouldExecuteInParallel(
+            List<StreamChunk.ToolCall> calls,
+            List<Tool> tools,
+            List<Integer> executable) {
         if (executable.size() <= 1) {
             return false;
         }
-        return executable.stream().allMatch(index -> tools.get(index).parallelizable());
+        return executable.stream()
+                .allMatch(index -> tools.get(index)
+                        .parallelizable(calls.get(index).argumentsJson()));
     }
 
     private void executeSerially(

@@ -45,6 +45,14 @@ class ToolRegistryTest {
         assertSame(Reversibility.IRREVERSIBLE, tool("file").reversibility());
     }
 
+    @Test
+    void parameterizedDeclarationsFallBackToNoArgumentDeclarations() {
+        Tool tool = tool("file");
+
+        assertSame(tool.reversibility(), tool.reversibility("{}"));
+        assertSame(tool.parallelizable(), tool.parallelizable("{}"));
+    }
+
     private static Tool tool(String name) {
         return new Tool() {
             @Override
