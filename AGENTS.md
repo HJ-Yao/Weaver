@@ -79,6 +79,21 @@ loop/
   context/                RunRequest、RunContext、StepResult、EventSink
 ```
 
+`tool` 包的标准结构：
+
+```
+tool/
+  Tool.java               工具契约
+  ToolRegistry.java       注册表
+  Reversibility.java      回滚性枚举
+  builtin/                内置工具及其实现细节
+    FileTool.java
+    ShellTool.java
+    GitTool.java
+    JsonTool.java         参数解析基类（包内可见）
+    ProcessRunner.java    进程执行基础设施（包内可见）
+```
+
 ## 6. 注释规范
 
 参考《阿里巴巴 Java 开发手册》与 Pi / Codex 源码：**公开边界写契约，方法内部写理由**。
@@ -93,6 +108,7 @@ loop/
 | 6 | 注释用中文；可能进入公开文档的用中英双语 |
 | 7 | 禁止：装饰性分隔线、作者 / 日期噪音、自动生成注释、复述方法名的废话 |
 | 8 | Lombok 生成的 getter / setter 不单独写 Javadoc，但**字段注释仍然必须写** |
+| 9 | 核心方法（`run`、`doApply`、`apply`）必须让**没读过代码的人只靠注释就能理解**：输入是什么、这一步产出什么、关键分支怎么走、失败时如何处理。不要求逐行注释，但每个关键阶段至少一句 |
 
 示例：
 
