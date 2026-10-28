@@ -16,6 +16,7 @@ target/
 local/
 .env
 *.local
+.workbuddy/
 
 # Logs & OS
 *.log
