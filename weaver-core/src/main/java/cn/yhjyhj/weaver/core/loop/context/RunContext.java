@@ -6,12 +6,14 @@ import cn.yhjyhj.weaver.core.model.StreamChunk;
 import cn.yhjyhj.weaver.core.model.StreamSink;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.Getter;
 
 /**
  * 贯穿单步策略链的可变上下文。
  *
  * <p>上下文只承载单步执行期间的状态；跨步事实仍以事件流为准。
  */
+@Getter
 public final class RunContext {
 
     /** 未提供实时输出出口时使用的空实现。 */
@@ -62,44 +64,16 @@ public final class RunContext {
         this.streamSink = streamSink;
     }
 
-    public String getSessionId() {
-        return sessionId;
-    }
-
-    public EventSink getSink() {
-        return sink;
-    }
-
-    public StreamSink getStreamSink() {
-        return streamSink;
-    }
-
-    public SessionSnapshot getHistory() {
-        return history;
-    }
-
     public void setHistory(SessionSnapshot history) {
         this.history = history;
-    }
-
-    public Intent getIntent() {
-        return intent;
     }
 
     public void setIntent(Intent intent) {
         this.intent = intent;
     }
 
-    public String getResponseText() {
-        return responseText;
-    }
-
     public void setResponseText(String responseText) {
         this.responseText = responseText;
-    }
-
-    public List<StreamChunk.ToolCall> getPendingToolCalls() {
-        return pendingToolCalls;
     }
 
     public void setPendingToolCalls(List<StreamChunk.ToolCall> pendingToolCalls) {
@@ -107,32 +81,16 @@ public final class RunContext {
         this.pendingToolCalls.addAll(pendingToolCalls);
     }
 
-    public boolean isModelDone() {
-        return modelDone;
-    }
-
     public void setModelDone(boolean modelDone) {
         this.modelDone = modelDone;
-    }
-
-    public boolean isModelFailed() {
-        return modelFailed;
     }
 
     public void setModelFailed(boolean modelFailed) {
         this.modelFailed = modelFailed;
     }
 
-    public StreamChunk.StopReason getStopReason() {
-        return stopReason;
-    }
-
     public void setStopReason(StreamChunk.StopReason stopReason) {
         this.stopReason = stopReason;
-    }
-
-    public boolean isToolExecuted() {
-        return toolExecuted;
     }
 
     public void setToolExecuted(boolean toolExecuted) {

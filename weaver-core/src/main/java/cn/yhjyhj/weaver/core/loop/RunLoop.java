@@ -16,8 +16,10 @@ import cn.yhjyhj.weaver.core.model.StreamSink;
 import cn.yhjyhj.weaver.core.phase.Phase;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import java.util.concurrent.atomic.AtomicBoolean;
+import lombok.extern.slf4j.Slf4j;
 
 /** 直线驱动单步策略链的运行循环。 */
+@Slf4j
 public final class RunLoop {
 
     private final ApprovalPolicy approvalPolicy; // 工具调用审批策略
@@ -25,9 +27,6 @@ public final class RunLoop {
 
     /** 单轮默认最大步数；达到上限按中止处理。 */
     public static final int DEFAULT_MAX_STEPS = 50;
-
-    /** 运行异常日志入口。 */
-    private static final System.Logger LOG = System.getLogger(RunLoop.class.getName());
 
     /** 未注入实时输出出口时使用的空实现。 */
     private static final StreamSink NO_OP_STREAM_SINK = new StreamSink() {
@@ -230,7 +229,7 @@ public final class RunLoop {
             aborted = aborted || cancelled.get() || phase.step() >= maxSteps;
         } catch (Exception exception) {
             // 统一把异常收敛为中止，保证每次 run 都有终态和 RunFinished 事实。
-            LOG.log(System.Logger.Level.ERROR, "run failed: session=" + sessionId, exception);
+            log.error("run failed: session={}", sessionId, exception);
             aborted = true;
         }
         finalPhase = aborted ? phase.abort() : phase.complete();
