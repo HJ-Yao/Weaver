@@ -6,6 +6,8 @@ import cn.yhjyhj.weaver.core.model.StreamChunk;
 import cn.yhjyhj.weaver.core.tool.Reversibility;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class RuleBasedApprovalPolicyTest {
 
@@ -126,6 +128,35 @@ class RuleBasedApprovalPolicyTest {
         assertEquals(
                 ApprovalDecision.ASK,
                 policy.decide(call("push", "{}"), Reversibility.IRREVERSIBLE));
+    }
+
+    @ParameterizedTest(name = "{0}: {1} + {2} -> {3}")
+    @CsvSource({
+        "DEFAULT, ASK, REVERSIBLE, ALLOW",
+        "DEFAULT, ASK, RECOVERABLE, ASK",
+        "DEFAULT, ASK, IRREVERSIBLE, ASK",
+        "DEFAULT, ALLOW, RECOVERABLE, ALLOW",
+        "DEFAULT, ALLOW, IRREVERSIBLE, ASK",
+        "DEFAULT, DENY, RECOVERABLE, DENY",
+        "PLAN, ASK, REVERSIBLE, ALLOW",
+        "PLAN, ASK, RECOVERABLE, DENY",
+        "PLAN, ALLOW, IRREVERSIBLE, DENY",
+        "ACCEPT_EDITS, ASK, RECOVERABLE, ALLOW",
+        "ACCEPT_EDITS, ASK, IRREVERSIBLE, ASK",
+        "ACCEPT_EDITS, ALLOW, IRREVERSIBLE, ASK",
+        "ACCEPT_EDITS, DENY, RECOVERABLE, DENY"
+    })
+    void resolvesEveryRuleModeAndReversibilityCombination(
+            PermissionMode mode,
+            ApprovalDecision baseDecision,
+            Reversibility reversibility,
+            ApprovalDecision expected) {
+        RuleBasedApprovalPolicy policy = new RuleBasedApprovalPolicy(
+                List.of(new ApprovalRule("custom", ".*", baseDecision)), mode);
+
+        assertEquals(
+                expected,
+                policy.decide(call("custom", "{}"), reversibility));
     }
 
     private static RuleBasedApprovalPolicy policyWith(ApprovalDecision decision) {

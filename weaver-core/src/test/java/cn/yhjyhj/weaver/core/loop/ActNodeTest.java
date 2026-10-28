@@ -394,6 +394,56 @@ class ActNodeTest {
         assertTrue(result.durationMs() >= 25L);
     }
 
+    @Test
+    void convertsNullResultsAndThrownFailuresIntoOrderedErrors() throws Exception {
+        Tool returnsNull = tool("null", true, argumentsJson -> null);
+        Tool throwsFailure = tool("throws", true, argumentsJson -> {
+            throw new IllegalStateException("boom");
+        });
+
+        List<SessionEvent> emitted = execute(
+                new ToolRegistry(List.of(returnsNull, throwsFailure)),
+                new StreamChunk.ToolCall("call-1", "null", "{}"),
+                new StreamChunk.ToolCall("call-2", "throws", "{}"));
+
+        List<ToolResult> results = completedResults(emitted);
+        assertEquals("tool returned null: null", results.get(0).content());
+        assertEquals("tool execution failed: boom", results.get(1).content());
+        assertTrue(results.stream().allMatch(ToolResult::isError));
+    }
+
+    @Test
+    void missingReversibilityIsTreatedAsIrreversible() throws Exception {
+        AtomicReference<Reversibility> requestedReversibility = new AtomicReference<>();
+        Tool ambiguous = new Tool() {
+            @Override
+            public String name() {
+                return "ambiguous";
+            }
+
+            @Override
+            public ToolResult execute(String argumentsJson) {
+                return new ToolResult("done", false, 0L);
+            }
+
+            @Override
+            public Reversibility reversibility(String argumentsJson) {
+                return null;
+            }
+        };
+
+        execute(
+                new ToolRegistry(List.of(ambiguous)),
+                (call, reversibility) -> {
+                    requestedReversibility.set(reversibility);
+                    return ApprovalDecision.ALLOW;
+                },
+                ApprovalGate.denyAll(),
+                new StreamChunk.ToolCall("call-1", "ambiguous", "{}"));
+
+        assertEquals(Reversibility.IRREVERSIBLE, requestedReversibility.get());
+    }
+
     private static List<SessionEvent> execute(
             ToolRegistry registry, StreamChunk.ToolCall... calls) throws Exception {
         return execute(registry, ALLOW_ALL, ApprovalGate.denyAll(), calls);

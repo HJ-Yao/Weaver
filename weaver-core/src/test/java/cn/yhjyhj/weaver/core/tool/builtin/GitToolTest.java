@@ -97,6 +97,34 @@ class GitToolTest {
     }
 
     @Test
+    void rejectsInvalidOperationsAndLogLimits() {
+        GitTool tool = new GitTool(workspace);
+        List<String> invalidArguments = List.of(
+                "{\"op\":\"unknown\"}",
+                "{\"op\":\"\"}",
+                "{\"op\":\"log\",\"limit\":\"10\"}",
+                "{\"op\":\"log\",\"limit\":0}",
+                "{\"op\":\"diff\",\"path\":42}",
+                "{\"op\":\"commit\"}");
+
+        for (String arguments : invalidArguments) {
+            ToolResult result = tool.execute(arguments);
+
+            assertTrue(result.isError(), arguments);
+            assertTrue(result.content().startsWith("invalid arguments: "), arguments);
+        }
+    }
+
+    @Test
+    void invalidOperationDeclarationsUseConservativeFallbacks() {
+        GitTool tool = new GitTool(workspace);
+        String arguments = "{\"op\":\"unknown\"}";
+
+        assertEquals(Reversibility.IRREVERSIBLE, tool.reversibility(arguments));
+        assertFalse(tool.parallelizable(arguments));
+    }
+
+    @Test
     void declaresReadOperationsAsReversibleAndWritesAsIrreversible() {
         GitTool tool = new GitTool(workspace);
         String status = "{\"op\":\"status\"}";

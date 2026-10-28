@@ -2,10 +2,12 @@ package cn.yhjyhj.weaver.core.tool.builtin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cn.yhjyhj.weaver.core.tool.WorkspaceTempDirFactory;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.HashMap;
@@ -83,6 +85,44 @@ class ProcessRunnerTest {
         assertFalse(result.timedOut());
         assertFalse(result.readError());
         assertEquals("hello", result.content().trim());
+    }
+
+    @Test
+    void truncatedOutputKeepsACompleteUtf8Prefix() throws Exception {
+        byte[] output = "a\u4e2d".getBytes(StandardCharsets.UTF_8);
+        int maxOutputBytes = 18;
+        ProcessRunner runner = new ProcessRunner(
+                Duration.ofSeconds(5L),
+                maxOutputBytes,
+                input -> new ProcessRunner.CapturedOutput(output, true, false));
+
+        ProcessRunner.Result result = runner.run(workspace, echoCommand());
+
+        assertEquals("a\n...[truncated]", result.content());
+        assertFalse(result.readError());
+    }
+
+    @Test
+    void timeoutWithoutCapturedOutputStillReportsTheConfiguredLimit() throws Exception {
+        ProcessRunner runner = new ProcessRunner(
+                Duration.ofMillis(300L),
+                OUTPUT_LIMIT_BYTES,
+                input -> new ProcessRunner.CapturedOutput(new byte[0], false, false));
+
+        ProcessRunner.Result result = runner.run(workspace, slowCommand());
+
+        assertEquals("[timeout after 300ms]", result.content());
+        assertTrue(result.timedOut());
+    }
+
+    @Test
+    void rejectsNonPositiveTimeoutAndOutputLimitTooSmallForMarker() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new ProcessRunner(Duration.ZERO, OUTPUT_LIMIT_BYTES));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new ProcessRunner(Duration.ofSeconds(1L), 15));
     }
 
     private static List<String> slowCommand() {

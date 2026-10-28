@@ -2,6 +2,7 @@ package cn.yhjyhj.weaver.core.tool.builtin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cn.yhjyhj.weaver.core.events.ToolResult;
@@ -207,6 +208,46 @@ class FileToolTest {
         assertFalse(tool.parallelizable(write));
         assertEquals(Reversibility.REVERSIBLE, tool.reversibility(list));
         assertTrue(tool.parallelizable(list));
+    }
+
+    @Test
+    void rejectsUnsupportedOperationsConservatively() {
+        FileTool tool = new FileTool(workspace);
+        String arguments = arguments("delete", "file.txt", null);
+
+        ToolResult result = tool.execute(arguments);
+
+        assertTrue(result.isError());
+        assertTrue(result.content().contains("unsupported file operation"));
+        assertEquals(Reversibility.IRREVERSIBLE, tool.reversibility(arguments));
+        assertFalse(tool.parallelizable(arguments));
+    }
+
+    @Test
+    void reportsFileAsNotADirectoryAndRejectsInvalidListLimit() throws Exception {
+        Files.writeString(workspace.resolve("file.txt"), "content");
+        FileTool tool = new FileTool(workspace);
+
+        ToolResult result = tool.execute(arguments("list", "file.txt", null));
+
+        assertTrue(result.isError());
+        assertEquals("not a directory: file.txt", result.content());
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new FileTool(workspace, 0));
+    }
+
+    @Test
+    void rejectsMissingAndNonTextArguments() {
+        FileTool tool = new FileTool(workspace);
+
+        ToolResult missingOperation = tool.execute("{\"path\":\"file.txt\"}");
+        ToolResult nonTextPath = tool.execute("{\"op\":\"read\",\"path\":123}");
+
+        assertTrue(missingOperation.isError());
+        assertTrue(missingOperation.content().contains("missing text field: op"));
+        assertTrue(nonTextPath.isError());
+        assertTrue(nonTextPath.content().contains("missing text field: path"));
     }
 
     private static String arguments(String op, String path, String content) {
