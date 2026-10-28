@@ -1,0 +1,6 @@
+server:
+  port: 8080
+
+weaver:
+  workspace: ${user.dir}
+  max-steps: 50
