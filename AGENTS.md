@@ -142,9 +142,13 @@ public record ModelRequest(String input, List<SessionSnapshot.Message> history) 
 
 ## 9. Git 规范
 
-- `main` 受保护：只经 PR 合入，不直推（M0 引导期提交除外）
-- 分支命名：`feat/` `fix/` `docs/` `refactor/` `chore/`；**开工前先在计划里写清本分支目标**（`local/tasks/`）
-- 一分支一目标；PR 说明含 what / why / how-verified；squash 合入，保持 main 历史一条一变更
+**阶段策略**：M1 开发期（`v0.1.0` 之前）直接在 `main` 上小步提交，不强制 PR；`v0.1.0` 发布后恢复「受保护 main + PR」流程。
+
+- **小步提交**：一个可编译、测试通过的逻辑变更一个 commit。鼓励细粒度，但每个 commit 必须有独立意义，不为增加提交数拆分无意义变更
+- Conventional Commits：`feat` / `fix` / `refactor` / `docs` / `test` / `chore`
+- 提交前：`weaver-core` 跑 `mvn -q -pl weaver-core verify`；其他模块跑对应测试
+- 提交信息写清 what / why；不要用 “fix bug”“update” 这类空话
+- 发版后（`v0.1.0` 起）：main 受保护，只经 PR 合入；分支命名 `feat/` `fix/` `docs/` `refactor/` `chore/`，一分支一目标，PR 说明含 what / why / how-verified，squash 合入
 - 发版：main 上打 `v<major>.<minor>.<patch>` tag 并写 changelog
 
 ## 10. Agent 工具使用
