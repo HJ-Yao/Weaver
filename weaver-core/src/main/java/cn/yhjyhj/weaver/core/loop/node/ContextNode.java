@@ -34,6 +34,17 @@ public final class ContextNode extends AbstractRunNode {
         this.reasonNode = reasonNode;
     }
 
+    /**
+     * 从事件流重建当前步骤所需的历史快照，并把路由权交给首步或后续推理节点。
+     *
+     * <p>输入是 {@link RunRequest#sessionId()} 指示的会话事件。无论第几步，本方法都从
+     * seq 0 回放事实，把结果写入 {@link RunContext#getHistory()}；本方法自身不 emit 事件，
+     * 也不生成 {@link StepResult}。
+     *
+     * <p>关键分支由 {@link #getNext(RunRequest, RunContext)} 决定：step 0 进入意图识别，
+     * 后续 step 直接进入推理，使工具执行结果能在下一步被模型看到。读取或回放失败时异常
+     * 原样抛出，由 RunLoop 统一记录并收敛为运行中止。
+     */
     @Override
     protected StepResult doApply(RunRequest request, RunContext context) {
         // TODO(M3): 投影缓存按 lastSeq 失效，避免每步全量 replay

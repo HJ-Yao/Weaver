@@ -195,6 +195,18 @@ public final class RunLoop {
     /**
      * 执行一轮会话，直到自然完成、达到步数上限、失败或收到取消请求。
      *
+     * <p>输入是本轮用户文本 {@code input}、会话标识 {@code sessionId}，以及构造时装配的
+     * 模型、事件存储、工具注册表和审批依赖。方法先持久化用户消息，再从 step 0 开始逐步
+     * 执行策略链；每一步使用新的 {@link RunContext}，跨步事实只从事件存储回放。
+     *
+     * <p>产出是完整会话事件流：节点追加的 assistant/tool/approval 事件，以及最终一条
+     * {@link SessionEvent.RunFinished}。运行结束后 {@link #finalPhase()} 暴露完成态或
+     * 中止态，供调用方审计。
+     *
+     * <p>关键分支：单步结果声明 aborted、运行中收到取消，或执行完最后允许步数时转为中止；
+     * 单步结果声明 finished 时自然完成；否则推进下一步。失败处理：策略链或模型流基础设施
+     * 抛出的异常会被记录并收敛为 aborted，不向调用线程继续抛出，且始终写出终止事件。
+     *
      * @param sessionId 当前会话标识
      * @param input 本轮用户输入
      */

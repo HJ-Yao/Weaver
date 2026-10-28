@@ -1,5 +1,6 @@
 package cn.yhjyhj.weaver.core.tool;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -51,6 +52,28 @@ class ToolRegistryTest {
 
         assertSame(tool.reversibility(), tool.reversibility("{}"));
         assertSame(tool.parallelizable(), tool.parallelizable("{}"));
+    }
+
+    @Test
+    void returnsModelSpecsSortedByToolName() {
+        Tool zebra = tool("zebra");
+        Tool alpha = tool("alpha");
+        ToolRegistry registry = new ToolRegistry(List.of(zebra, alpha));
+
+        List<ToolSpec> specs = registry.specs();
+
+        assertEquals(List.of("alpha", "zebra"), specs.stream()
+                .map(ToolSpec::name)
+                .toList());
+    }
+
+    @Test
+    void returnsImmutableModelSpecs() {
+        List<ToolSpec> specs = new ToolRegistry(List.of(tool("file"))).specs();
+
+        assertThrows(
+                UnsupportedOperationException.class,
+                () -> specs.add(new ToolSpec("shell", "shell", "{}")));
     }
 
     private static Tool tool(String name) {

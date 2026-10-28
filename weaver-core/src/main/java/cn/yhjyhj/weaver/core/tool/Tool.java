@@ -13,6 +13,28 @@ public interface Tool {
     String name();
 
     /**
+     * 返回面向模型的用途说明。
+     *
+     * <p>默认值与工具名相同，内置工具必须覆盖为能说明使用时机和副作用的文本。
+     *
+     * @return 工具用途说明
+     */
+    default String description() {
+        return name();
+    }
+
+    /**
+     * 返回描述 argumentsJson 结构的 JSON Schema 字符串。
+     *
+     * <p>默认 schema 表示一个不限制字段的对象，内置工具必须覆盖为精确契约。
+     *
+     * @return argumentsJson 的 JSON Schema
+     */
+    default String parametersSchema() {
+        return "{\"type\":\"object\"}";
+    }
+
+    /**
      * 执行工具并返回可供回放的结果。
      *
      * @param argumentsJson 模型给出的原始参数 JSON

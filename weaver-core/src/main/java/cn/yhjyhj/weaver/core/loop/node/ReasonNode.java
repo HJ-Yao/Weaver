@@ -9,6 +9,7 @@ import cn.yhjyhj.weaver.core.loop.context.StepResult;
 import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.model.ModelRequest;
 import cn.yhjyhj.weaver.core.model.StreamChunk;
+import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Flow;
 
@@ -16,6 +17,7 @@ import java.util.concurrent.Flow;
 public final class ReasonNode extends AbstractRunNode {
 
     private final ModelClient model; // 模型调用边界
+    private final ToolRegistry registry; // 提供给模型的可用工具描述来源
     /** 检测到工具调用时进入的执行节点。 */
     private final StrategyHandler<RunRequest, RunContext, StepResult> actNode;
     /** 没有工具调用时进入的结果收敛节点。 */
@@ -25,25 +27,40 @@ public final class ReasonNode extends AbstractRunNode {
      * 创建推理节点。
      *
      * @param model 模型调用边界
+     * @param registry 可用工具注册表
      * @param actNode 有待执行工具调用时的后继节点
      * @param observeNode 无工具调用时的后继节点
      */
     public ReasonNode(
             ModelClient model,
+            ToolRegistry registry,
             StrategyHandler<RunRequest, RunContext, StepResult> actNode,
             StrategyHandler<RunRequest, RunContext, StepResult> observeNode) {
         super(observeNode);
         this.model = model;
+        this.registry = registry;
         this.actNode = actNode;
         this.observeNode = observeNode;
     }
 
+    /**
+     * 调用模型生成当前步骤的回复，并收集文本、结束原因和工具调用。
+     *
+     * <p>输入是 {@link RunRequest#input()}、{@link RunContext#getHistory()} 的消息，
+     * 以及注册表声明的工具清单。模型流会被同步订阅：文本同时写入上下文和实时输出端，
+     * 工具调用进入待执行列表；非空最终文本作为一条 assistant 消息写入事件流。
+     *
+     * <p>本方法始终返回 {@code null}，由 {@link #getNext(RunRequest, RunContext)}
+     * 根据是否收集到工具调用决定进入 ActNode 或 ObserveNode。模型流中的错误会标记
+     * 上下文失败并正常结束等待；调用模型或订阅基础设施抛出的异常则交由 RunLoop
+     * 统一收敛为运行中止。
+     */
     @Override
     protected StepResult doApply(RunRequest request, RunContext context) {
         StringBuilder text = new StringBuilder();
         CompletableFuture<Void> completion = new CompletableFuture<>();
         ModelRequest modelRequest = new ModelRequest(
-                request.input(), context.getHistory().messages());
+                request.input(), context.getHistory().messages(), registry.specs());
         model.stream(modelRequest).subscribe(new ChunkSubscriber(context, text, completion));
         // TODO(M2): 改为 inbox 驱动的异步推进，避免阻塞调用线程
         completion.join();

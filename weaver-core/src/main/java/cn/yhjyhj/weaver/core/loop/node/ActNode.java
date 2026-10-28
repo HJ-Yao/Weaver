@@ -67,6 +67,22 @@ public final class ActNode extends AbstractRunNode {
         this.approvalGate = Objects.requireNonNull(approvalGate, "approvalGate");
     }
 
+    /**
+     * 审批并执行本步模型请求的全部工具调用，再按原调用顺序记录结果。
+     *
+     * <p>输入是 {@link RunContext#getPendingToolCalls()}，每个调用的工具名和原始参数会通过
+     * 注册表、审批策略和审批门完成风险判断。对每次调用都会 emit 一条
+     * {@link SessionEvent.ToolCallStarted}；未直接允许的调用还会 emit 审批请求与结果，
+     * 被拒绝或未知的工具生成错误结果而不执行。
+     *
+     * <p>产出是按模型给出顺序排列的 {@link SessionEvent.ToolCallCompleted} 事件。获得批准且
+     * 已注册的调用在全部可并行时用虚拟线程并发执行，否则串行执行；并发完成顺序不会改变事件
+     * 顺序。结束时清空待执行列表并标记 {@code toolExecuted}，使 ObserveNode 决定进入下一推理步。
+     *
+     * <p>失败处理：单个工具返回 null、抛出运行时异常或不存在时，都转换为带错误标记的
+     * ToolResult 并继续记录完成事件；中断会恢复线程中断标记。审批或并行执行基础设施自身
+     * 抛出的未收敛异常交给 RunLoop 统一终止本轮。
+     */
     @Override
     protected StepResult doApply(RunRequest request, RunContext context) {
         List<StreamChunk.ToolCall> calls = List.copyOf(context.getPendingToolCalls());

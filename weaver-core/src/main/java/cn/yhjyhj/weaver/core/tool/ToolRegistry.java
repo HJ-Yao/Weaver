@@ -39,6 +39,19 @@ public final class ToolRegistry {
     }
 
     /**
+     * 返回按工具名排序的只读描述列表，供模型请求使用。
+     *
+     * @return 顺序稳定且不可修改的工具描述列表
+     */
+    public List<ToolSpec> specs() {
+        return tools.values().stream()
+                .map(tool -> new ToolSpec(
+                        tool.name(), tool.description(), tool.parametersSchema()))
+                .sorted((left, right) -> left.name().compareTo(right.name()))
+                .toList();
+    }
+
+    /**
      * 创建空注册表。
      *
      * @return 不包含任何工具的注册表

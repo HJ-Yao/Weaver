@@ -19,6 +19,7 @@ import cn.yhjyhj.weaver.core.model.StreamSink;
 import cn.yhjyhj.weaver.core.phase.Phase;
 import cn.yhjyhj.weaver.core.tool.Tool;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
+import cn.yhjyhj.weaver.core.tool.ToolSpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Flow;
@@ -246,6 +247,23 @@ class RunLoopTest {
                 && finished.aborted());
     }
 
+    @Test
+    void sendsRegisteredToolSpecsToModel() {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        ScriptedModelClient model = new ScriptedModelClient(List.of(response(
+                new StreamChunk.Done(StreamChunk.StopReason.STOP))), null);
+        ToolRegistry registry = new ToolRegistry(List.of(
+                specifiedTool("zeta", "last"),
+                specifiedTool("alpha", "first")));
+
+        new RunLoop(model, store, registry).run(SESSION_ID, "hello");
+
+        assertEquals(List.of(
+                new ToolSpec("alpha", "first", "{\"type\":\"object\"}"),
+                new ToolSpec("zeta", "last", "{\"type\":\"object\"}")),
+                model.requests.getFirst().tools());
+    }
+
     private static StreamSink streamSink(
             java.util.function.Consumer<String> onDelta,
             java.util.function.Consumer<StreamChunk.ToolCall> onToolCall,
@@ -297,6 +315,30 @@ class RunLoopTest {
                 return new ToolResult("ok", false, 0L);
             }
         }));
+    }
+
+    private static Tool specifiedTool(String name, String description) {
+        return new Tool() {
+            @Override
+            public String name() {
+                return name;
+            }
+
+            @Override
+            public String description() {
+                return description;
+            }
+
+            @Override
+            public String parametersSchema() {
+                return "{\"type\":\"object\"}";
+            }
+
+            @Override
+            public ToolResult execute(String argumentsJson) {
+                return new ToolResult("ok", false, 0L);
+            }
+        };
     }
 
     private static Flow.Publisher<StreamChunk> publisherOf(StreamChunk... chunks) {

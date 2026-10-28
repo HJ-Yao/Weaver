@@ -14,6 +14,18 @@ import java.util.Objects;
 /** 在 workspace 根目录执行一条 shell 命令。 */
 public final class ShellTool extends JsonTool {
 
+    private static final String DESCRIPTION = // 面向模型的工具用途说明
+            "Run a shell command in the workspace root. Commands are irreversible; "
+                    + "dangerous commands require approval.";
+    private static final String PARAMETERS_SCHEMA = // 模型调用参数契约
+            """
+            {
+              "type": "object",
+              "properties": {"cmd": {"type": "string"}},
+              "required": ["cmd"]
+            }
+            """;
+
     private final Path workspaceRoot; // 命令的固定工作目录
     private final ProcessRunner processRunner; // 统一执行超时、输出截断与进程清理
     private final Map<String, String> additionalEnvironment; // 启动前注入并统一清理的测试环境
@@ -65,6 +77,18 @@ public final class ShellTool extends JsonTool {
     @Override
     public String name() {
         return "shell";
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String description() {
+        return DESCRIPTION;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String parametersSchema() {
+        return PARAMETERS_SCHEMA;
     }
 
     @Override

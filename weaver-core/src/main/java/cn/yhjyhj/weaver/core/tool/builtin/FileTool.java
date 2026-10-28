@@ -15,6 +15,22 @@ import java.util.stream.Stream;
 /** 在 workspace 根目录内读取、写入和列出文件。 */
 public final class FileTool extends JsonTool {
 
+    private static final String DESCRIPTION = // 面向模型的工具用途说明
+            "Read, write or list files inside the workspace. write requires content; "
+                    + "list returns relative paths.";
+    private static final String PARAMETERS_SCHEMA = // 模型调用参数契约
+            """
+            {
+              "type": "object",
+              "properties": {
+                "op": {"type": "string", "enum": ["read", "write", "list"]},
+                "path": {"type": "string", "description": "相对工作区根的路径"},
+                "content": {"type": "string", "description": "write 时的文件内容"}
+              },
+              "required": ["op", "path"]
+            }
+            """;
+
     static final long MAX_READ_BYTES = 1024 * 1024; // 单次读取允许的最大字节数
     static final int MAX_WRITE_BYTES = 1024 * 1024; // 单次写入允许的最大字节数
     static final int MAX_LIST_ENTRIES = 10_000; // 单次列出的最大条目数
@@ -51,6 +67,18 @@ public final class FileTool extends JsonTool {
     @Override
     public String name() {
         return "file";
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String description() {
+        return DESCRIPTION;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String parametersSchema() {
+        return PARAMETERS_SCHEMA;
     }
 
     @Override

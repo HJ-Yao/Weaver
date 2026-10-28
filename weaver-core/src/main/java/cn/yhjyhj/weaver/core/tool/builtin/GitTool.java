@@ -15,6 +15,26 @@ import java.util.Objects;
 /** 在 workspace 根目录执行受限的 Git 读取与发布操作。 */
 public final class GitTool extends JsonTool {
 
+    private static final String DESCRIPTION = // 面向模型的工具用途说明
+            "Run git read or write operations. status/diff/log are read-only; "
+                    + "commit/push are irreversible.";
+    private static final String PARAMETERS_SCHEMA = // 模型调用参数契约
+            """
+            {
+              "type": "object",
+              "properties": {
+                "op": {
+                  "type": "string",
+                  "enum": ["status", "diff", "log", "commit", "push"]
+                },
+                "path": {"type": "string"},
+                "limit": {"type": "integer"},
+                "message": {"type": "string"}
+              },
+              "required": ["op"]
+            }
+            """;
+
     private final Path workspaceRoot; // Git 命令的固定工作目录
     private final ProcessRunner processRunner; // 统一执行超时、输出截断与进程清理
 
@@ -33,6 +53,18 @@ public final class GitTool extends JsonTool {
     @Override
     public String name() {
         return "git";
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String description() {
+        return DESCRIPTION;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public String parametersSchema() {
+        return PARAMETERS_SCHEMA;
     }
 
     @Override

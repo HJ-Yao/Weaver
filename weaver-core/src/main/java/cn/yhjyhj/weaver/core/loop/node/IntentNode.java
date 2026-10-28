@@ -42,6 +42,16 @@ public final class IntentNode extends AbstractRunNode {
         this.reasonNode = reasonNode;
     }
 
+    /**
+     * 在首步识别用户意图；信息不足时直接结束本轮并请求补充信息。
+     *
+     * <p>输入是 {@link RunRequest#step()} 与 {@link RunRequest#input()}，分类结果写入
+     * {@link RunContext#setIntent(Intent)}。step 大于 0 时本节点不重复分类，也不修改上下文。
+     *
+     * <p>关键分支：明确意图时返回 {@code null}，继续进入推理；分类结果为
+     * {@link Intent#CLARIFY} 时 emit 一条 assistant 追问消息，并返回已完成的结果以短路
+     * 后续模型调用。分类器抛出的异常不被吞掉，由 RunLoop 收敛为运行中止。
+     */
     @Override
     protected StepResult doApply(RunRequest request, RunContext context) {
         if (request.step() > 0) {
