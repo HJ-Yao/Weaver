@@ -25,7 +25,7 @@ Weaver 是一个从零手写的 Java Agent 框架：**核心自研，Spring 只�
 
 | # | 规则 |
 |---|---|
-| 1 | `weaver-core` **不依赖 Agent 框架、DI 容器、Web / ORM 框架**（Spring、Spring AI、LangChain4j、Google ADK 等一律禁止）。允许纯工具库（Jackson、SLF4J API、JUnit）；新增运行时依赖需在 PR 说明理由 |
+| 1 | `weaver-core` **不依赖 Agent 框架、DI 容器、Web / ORM 框架**（Spring、Spring AI、LangChain4j、Google ADK 等一律禁止）。允许纯工具库（Jackson、SLF4J API、Lombok、JUnit）；新增运行时依赖需在 PR 说明理由 |
 | 2 | 依赖方向单向：`core ← plugins ← mcp ← server/cli`。上层可依赖下层，反向禁止 |
 | 3 | `weaver-server` 是唯一允许使用 Spring 的模块 |
 
@@ -36,6 +36,24 @@ Weaver 是一个从零手写的 Java Agent 框架：**核心自研，Spring 只�
 - 构建：Maven 多模块，父 POM 已导入 Spring Boot BOM（依赖版本统一管理）
 - 测试：JUnit 5；核心逻辑必须 TDD（先写测试再实现）
 - 本机构建：`JAVA_HOME` 必须指向 JDK 21+（如 `~\.jdks\corretto-24.0.2`）
+
+### 4.1 Lombok 与日志
+
+**允许**：
+
+- `@Slf4j`：统一日志入口
+- `@Getter` / `@Setter`：替代样板访问器
+- `@RequiredArgsConstructor`：仅用于**无父类、无校验逻辑**的类
+
+**禁止**：
+
+- `@Data`：可变类的 `equals/hashCode/toString` 有隐患
+- `@Builder`：优先用 `record`
+- `@SneakyThrows`：不要吞掉受检异常
+- 在继承 `AbstractRunNode` 的节点上使用 `@RequiredArgsConstructor`（Lombok 无法调用 `super(next)`）
+- 用 Lombok 掩盖复杂构造逻辑；校验、副作用、`Objects.requireNonNull` 仍手写
+
+日志统一使用 **SLF4J API**；日志绑定（logback）只在 `weaver-server` 提供，core 不绑定实现。
 
 ## 5. 包组织规范
 
@@ -74,6 +92,7 @@ loop/
 | 5 | 不注释显而易见的代码（getter / setter、简单赋值、单一 return） |
 | 6 | 注释用中文；可能进入公开文档的用中英双语 |
 | 7 | 禁止：装饰性分隔线、作者 / 日期噪音、自动生成注释、复述方法名的废话 |
+| 8 | Lombok 生成的 getter / setter 不单独写 Javadoc，但**字段注释仍然必须写** |
 
 示例：
 
