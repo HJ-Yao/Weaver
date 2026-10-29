@@ -17,6 +17,7 @@ local/
 .env
 *.local
 .workbuddy/
+.archify/
 
 # Logs & OS
 *.log
