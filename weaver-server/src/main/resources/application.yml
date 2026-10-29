@@ -5,3 +5,11 @@ weaver:
   workspace: ${user.dir}
   max-steps: 50
   store-path: ${user.home}/.weaver/weaver.db
+  model:
+    protocol: ${WEAVER_MODEL_PROTOCOL:openai-chat-completions}
+    base-url: ${WEAVER_MODEL_BASE_URL:https://api.deepseek.com}
+    api-key: ${WEAVER_MODEL_API_KEY:}
+    model: ${WEAVER_MODEL_NAME:deepseek-chat}
+    max-tokens: ${WEAVER_MODEL_MAX_TOKENS:4096}
+    temperature: ${WEAVER_MODEL_TEMPERATURE:0.7}
+    timeout-seconds: ${WEAVER_MODEL_TIMEOUT_SECONDS:120}

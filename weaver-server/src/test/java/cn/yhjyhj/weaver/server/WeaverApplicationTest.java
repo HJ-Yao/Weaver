@@ -12,7 +12,7 @@ import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import cn.yhjyhj.weaver.server.api.SessionController;
 import cn.yhjyhj.weaver.server.config.WeaverProperties;
-import cn.yhjyhj.weaver.server.model.EchoModelClient;
+import cn.yhjyhj.weaver.server.model.OpenAiChatCompletionsModelClient;
 import cn.yhjyhj.weaver.server.service.RunService;
 import cn.yhjyhj.weaver.server.service.SessionService;
 import cn.yhjyhj.weaver.server.store.SqliteEventStore;
@@ -48,6 +48,7 @@ class WeaverApplicationTest {
         registry.add("weaver.workspace", () -> workspace.toString());
         registry.add("weaver.max-steps", () -> 25);
         registry.add("weaver.store-path", () -> eventStore.toString());
+        registry.add("weaver.model.api-key", () -> "test-key");
     }
 
     @Test
@@ -65,7 +66,7 @@ class WeaverApplicationTest {
         assertTrue(context.getBean(ApprovalPolicy.class) != null);
         assertTrue(context.getBean(ApprovalGrantStore.class) != null);
         assertTrue(context.getBean(ApprovalGate.class) != null);
-        assertTrue(context.getBean(ModelClient.class) instanceof EchoModelClient);
+        assertTrue(context.getBean(ModelClient.class) instanceof OpenAiChatCompletionsModelClient);
         assertTrue(context.getBean(SessionService.class) != null);
         assertTrue(context.getBean(RunService.class) != null);
         assertTrue(context.getBean(SessionController.class) != null);

@@ -11,7 +11,7 @@ import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import cn.yhjyhj.weaver.core.tool.builtin.FileTool;
 import cn.yhjyhj.weaver.core.tool.builtin.GitTool;
 import cn.yhjyhj.weaver.core.tool.builtin.ShellTool;
-import cn.yhjyhj.weaver.server.model.EchoModelClient;
+import cn.yhjyhj.weaver.server.model.OpenAiChatCompletionsModelClient;
 import cn.yhjyhj.weaver.server.store.SqliteEventStore;
 import java.nio.file.Path;
 import java.util.List;
@@ -69,7 +69,7 @@ public class WeaverConfig {
     }
 
     /**
-     * 创建无 UI 场景的安全审批闸门。
+     * 创建无 UI 场景使用的安全审批闸门。
      *
      * @return 一律拒绝 ASK 请求的审批闸门
      */
@@ -79,12 +79,19 @@ public class WeaverConfig {
     }
 
     /**
-     * 创建当前阶段的回显模型客户端。
+     * 按配置协议创建模型客户端。
      *
-     * @return 不访问外部模型的回显实现
+     * @param properties Weaver 运行与模型配置
+     * @return 当前配置对应的模型客户端
+     * @throws IllegalArgumentException 协议不受支持时抛出
      */
     @Bean
-    public ModelClient modelClient() {
-        return new EchoModelClient();
+    public ModelClient modelClient(WeaverProperties properties) {
+        return switch (properties.model().protocol()) {
+            case "openai-chat-completions" ->
+                    new OpenAiChatCompletionsModelClient(properties.model());
+            default -> throw new IllegalArgumentException(
+                    "unsupported model protocol: " + properties.model().protocol());
+        };
     }
 }
