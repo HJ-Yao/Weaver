@@ -1,7 +1,7 @@
 package cn.yhjyhj.weaver.core.loop.context;
 
-import cn.yhjyhj.weaver.core.events.SessionSnapshot;
 import cn.yhjyhj.weaver.core.loop.intent.Intent;
+import cn.yhjyhj.weaver.core.model.ModelMessage;
 import cn.yhjyhj.weaver.core.model.StreamChunk;
 import cn.yhjyhj.weaver.core.model.StreamSink;
 import java.util.ArrayList;
@@ -31,8 +31,8 @@ public final class RunContext {
     private final String sessionId; // 当前会话标识
     private final EventSink sink; // 当前运行的事件出口
     private final StreamSink streamSink; // 当前运行的实时输出出口
-    /** 本步开始前从事件流回放得到的会话快照。 */
-    private SessionSnapshot history = SessionSnapshot.empty();
+    /** 本步开始前从事件流回放得到的模型历史。 */
+    private List<ModelMessage> history = List.of();
     private Intent intent; // 本步识别出的用户意图
     private String responseText = ""; // 本步已累积的模型文本
     private final List<StreamChunk.ToolCall> pendingToolCalls = new ArrayList<>(); // 待执行工具调用
@@ -64,8 +64,13 @@ public final class RunContext {
         this.streamSink = streamSink;
     }
 
-    public void setHistory(SessionSnapshot history) {
-        this.history = history;
+    /**
+     * 设置本步模型历史，并以不可变副本隔离调用方列表。
+     *
+     * @param history 从事件流重建的模型历史
+     */
+    public void setHistory(List<ModelMessage> history) {
+        this.history = List.copyOf(history);
     }
 
     public void setIntent(Intent intent) {

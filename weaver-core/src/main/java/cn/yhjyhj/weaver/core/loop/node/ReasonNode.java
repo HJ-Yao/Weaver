@@ -46,7 +46,7 @@ public final class ReasonNode extends AbstractRunNode {
     /**
      * 调用模型生成当前步骤的回复，并收集文本、结束原因和工具调用。
      *
-     * <p>输入是 {@link RunRequest#input()}、{@link RunContext#getHistory()} 的消息，
+     * <p>输入是 {@link RunRequest#input()}、{@link RunContext#getHistory()} 的结构化历史，
      * 以及注册表声明的工具清单。模型流会被同步订阅：文本同时写入上下文和实时输出端，
      * 工具调用进入待执行列表；非空最终文本作为一条 assistant 消息写入事件流。
      *
@@ -60,7 +60,7 @@ public final class ReasonNode extends AbstractRunNode {
         StringBuilder text = new StringBuilder();
         CompletableFuture<Void> completion = new CompletableFuture<>();
         ModelRequest modelRequest = new ModelRequest(
-                request.input(), context.getHistory().messages(), registry.specs());
+                request.input(), context.getHistory(), registry.specs());
         model.stream(modelRequest).subscribe(new ChunkSubscriber(context, text, completion));
         // TODO(M2): 改为 inbox 驱动的异步推进，避免阻塞调用线程
         completion.join();
@@ -83,6 +83,7 @@ public final class ReasonNode extends AbstractRunNode {
     @Override
     public StrategyHandler<RunRequest, RunContext, StepResult> getNext(
             RunRequest request, RunContext context) {
+        // 有待执行工具时必须先进入 ActNode 回灌结果；没有调用才可直接收敛本步结果。
         return context.getPendingToolCalls().isEmpty() ? observeNode : actNode;
     }
 
@@ -112,9 +113,11 @@ public final class ReasonNode extends AbstractRunNode {
         @Override
         public void onNext(StreamChunk chunk) {
             if (chunk instanceof StreamChunk.Text delta) {
+                // 累积文本用于最终 assistant 事件，实时转发则让调用方能边生成边展示。
                 text.append(delta.delta());
                 context.getStreamSink().onDelta(delta.delta());
             } else if (chunk instanceof StreamChunk.ToolCall toolCall) {
+                // 推理节点只收集调用；执行与结果回传由后续 ActNode 负责。
                 context.getStreamSink().onToolCall(toolCall);
                 context.getPendingToolCalls().add(toolCall);
             } else if (chunk instanceof StreamChunk.Done done) {

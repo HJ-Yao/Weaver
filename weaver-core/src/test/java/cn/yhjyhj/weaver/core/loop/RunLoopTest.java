@@ -11,10 +11,10 @@ import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.approval.ApprovalResult;
 import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
-import cn.yhjyhj.weaver.core.events.SessionSnapshot;
 import cn.yhjyhj.weaver.core.events.StoredEvent;
 import cn.yhjyhj.weaver.core.events.ToolResult;
 import cn.yhjyhj.weaver.core.model.ModelClient;
+import cn.yhjyhj.weaver.core.model.ModelMessage;
 import cn.yhjyhj.weaver.core.model.ModelRequest;
 import cn.yhjyhj.weaver.core.model.StreamChunk;
 import cn.yhjyhj.weaver.core.model.StreamSink;
@@ -107,9 +107,11 @@ class RunLoopTest {
         assertFalse(completed.result().isError());
         assertTrue(completed.result().durationMs() >= 0L);
         assertEquals(List.of(
-                new SessionSnapshot.Message(SessionEvent.Role.USER, "读取 x"),
-                new SessionSnapshot.Message(SessionEvent.Role.ASSISTANT, "checking"),
-                new SessionSnapshot.Message(SessionEvent.Role.TOOL, "ok")),
+                new ModelMessage.User("读取 x"),
+                new ModelMessage.Assistant(
+                        "checking",
+                        List.of(new StreamChunk.ToolCall("call-1", "file", "read x"))),
+                new ModelMessage.Tool("call-1", "ok", false)),
                 model.requests.get(1).history());
         assertEquals(new SessionEvent.RunFinished(false), events(store).getLast());
     }
@@ -137,6 +139,13 @@ class RunLoopTest {
         assertEquals(List.of(
                 new SessionEvent.MessageAdded(SessionEvent.Role.ASSISTANT, "done")),
                 assistantMessages(store));
+        assertEquals(List.of(
+                new ModelMessage.User("读取 x"),
+                new ModelMessage.Assistant(
+                        "",
+                        List.of(new StreamChunk.ToolCall("call-1", "file", "read x"))),
+                new ModelMessage.Tool("call-1", "ok", false)),
+                model.requests.get(1).history());
     }
 
     @Test

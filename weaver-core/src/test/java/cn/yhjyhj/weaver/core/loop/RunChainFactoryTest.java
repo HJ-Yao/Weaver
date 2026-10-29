@@ -16,6 +16,7 @@ import cn.yhjyhj.weaver.core.loop.context.RunRequest;
 import cn.yhjyhj.weaver.core.loop.context.StepResult;
 import cn.yhjyhj.weaver.core.loop.node.ContextNode;
 import cn.yhjyhj.weaver.core.model.ModelClient;
+import cn.yhjyhj.weaver.core.model.ModelMessage;
 import cn.yhjyhj.weaver.core.model.ModelRequest;
 import cn.yhjyhj.weaver.core.model.StreamChunk;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
@@ -42,8 +43,7 @@ class RunChainFactoryTest {
         assertInstanceOf(ContextNode.class, chain);
         assertTrue(result.finished());
         assertEquals(List.of(
-                new cn.yhjyhj.weaver.core.events.SessionSnapshot.Message(
-                        SessionEvent.Role.USER, "earlier")),
+                new ModelMessage.User("earlier")),
                 model.requests.getFirst().history());
     }
 

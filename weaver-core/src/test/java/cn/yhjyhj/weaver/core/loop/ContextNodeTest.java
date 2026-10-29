@@ -10,6 +10,7 @@ import cn.yhjyhj.weaver.core.loop.context.RunContext;
 import cn.yhjyhj.weaver.core.loop.context.RunRequest;
 import cn.yhjyhj.weaver.core.loop.context.StepResult;
 import cn.yhjyhj.weaver.core.loop.node.ContextNode;
+import cn.yhjyhj.weaver.core.model.ModelMessage;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
@@ -55,17 +56,16 @@ class ContextNodeTest {
                 "session", new SessionEvent.MessageAdded(SessionEvent.Role.USER, "earlier"));
         ContextNode node = new ContextNode(
                 store,
-                (request, context) -> new StepResult(true, false, context
-                        .getHistory()
-                        .messages()
-                        .getFirst()
-                        .content()),
+                (request, context) -> new StepResult(
+                        true,
+                        false,
+                        ((ModelMessage.User) context.getHistory().getFirst()).content()),
                 (request, context) -> null);
         RunContext context = new RunContext("session", event -> {});
 
         StepResult result = node.apply(new RunRequest("session", "input", 0), context);
 
         assertEquals("earlier", result.text());
-        assertEquals("earlier", context.getHistory().messages().getFirst().content());
+        assertEquals(new ModelMessage.User("earlier"), context.getHistory().getFirst());
     }
 }

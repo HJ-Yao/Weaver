@@ -8,7 +8,7 @@ import cn.yhjyhj.weaver.core.loop.context.RunContext;
 import cn.yhjyhj.weaver.core.loop.context.RunRequest;
 import cn.yhjyhj.weaver.core.loop.context.StepResult;
 
-/** 从事件流重建本步所需的历史快照，并按步骤选择意图或推理节点。 */
+/** 从事件流重建本步所需的模型历史，并按步骤选择意图或推理节点。 */
 public final class ContextNode extends AbstractRunNode {
 
     private final SessionEventStore store; // 会话事实源
@@ -35,11 +35,17 @@ public final class ContextNode extends AbstractRunNode {
     }
 
     /**
-     * 从事件流重建当前步骤所需的历史快照，并把路由权交给首步或后续推理节点。
+     * 从事件流重建当前步骤所需的模型历史，并把路由权交给首步或后续推理节点。
      *
      * <p>输入是 {@link RunRequest#sessionId()} 指示的会话事件。无论第几步，本方法都从
-     * seq 0 回放事实，把结果写入 {@link RunContext#getHistory()}；本方法自身不 emit 事件，
+     * seq 0 回放完整事实，把结果写入 {@link RunContext#getHistory()}。这样每步都基于同一
+     * 事实源重建，不依赖可能遗漏事件的内存增量状态，从而保持“回放 == 现场”。使用
+     * {@link SessionEvents#replayModelHistory(Iterable)} 而不是 UI 用的 {@link SessionEvents#replay(Iterable)}，
+     * 是为了保留 assistant 工具调用、tool 结果及 callId 配对。本方法自身不 emit 事件，
      * 也不生成 {@link StepResult}。
+     *
+     * <p>当前每步全量回放；TODO(M3) 的投影缓存将在 lastSeq 一致时复用等价投影，
+     * 缓存失效后仍从事件流重建同一份模型历史。
      *
      * <p>关键分支由 {@link #getNext(RunRequest, RunContext)} 决定：step 0 进入意图识别，
      * 后续 step 直接进入推理，使工具执行结果能在下一步被模型看到。读取或回放失败时异常
@@ -47,8 +53,9 @@ public final class ContextNode extends AbstractRunNode {
      */
     @Override
     protected StepResult doApply(RunRequest request, RunContext context) {
-        // TODO(M3): 投影缓存按 lastSeq 失效，避免每步全量 replay
-        context.setHistory(SessionEvents.replay(store.from(request.sessionId(), 0)));
+        // TODO(M3): 用按 lastSeq 失效的投影缓存复用本次完整回放结果，且不得改变模型历史语义。
+        context.setHistory(
+                SessionEvents.replayModelHistory(store.from(request.sessionId(), 0)));
         return null;
     }
 
