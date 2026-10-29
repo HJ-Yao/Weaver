@@ -6,15 +6,42 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 /** 将工具请求路径限制在真实工作区根目录内。 */
-final class WorkspacePaths {
+public final class WorkspacePaths {
 
     private static final Pattern WINDOWS_DRIVE_PATH =
             Pattern.compile("^[A-Za-z]:"); // 跨平台识别 Windows 盘符绝对路径
 
     private WorkspacePaths() {}
+
+    /**
+     * 按工作区路径规则解析一个可能不存在的相对路径，不访问文件系统。
+     *
+     * @param path 模型给出的相对路径
+     * @return 规范化后的相对路径；null、非法、绝对或越界路径返回空
+     */
+    public static Optional<Path> parseRelative(String path) {
+        if (path == null) {
+            return Optional.empty();
+        }
+        try {
+            // 统一常见分隔符，使审批判断不依赖当前操作系统。
+            Path requested = Path.of(path.replace('\\', '/'));
+            if (isAbsoluteRequest(path, requested)) {
+                return Optional.empty();
+            }
+            Path normalized = requested.normalize();
+            if (normalized.startsWith("..")) {
+                return Optional.empty();
+            }
+            return Optional.of(normalized);
+        } catch (InvalidPathException exception) {
+            return Optional.empty();
+        }
+    }
 
     /**
      * 解析并校验工作区内路径。

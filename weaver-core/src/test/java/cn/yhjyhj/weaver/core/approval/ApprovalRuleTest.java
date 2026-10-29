@@ -1,6 +1,8 @@
 package cn.yhjyhj.weaver.core.approval;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
@@ -8,22 +10,26 @@ import org.junit.jupiter.api.Test;
 class ApprovalRuleTest {
 
     @Test
-    void compilesPatternsWhenConstructed() {
-        assertDoesNotThrow(() -> new ApprovalRule(
-                "git", "^(status|diff|log)\\b.*", ApprovalDecision.ALLOW));
+    void allowsWildcardToolAndOperation() {
+        ApprovalRule rule =
+                assertDoesNotThrow(() -> new ApprovalRule(null, null, ApprovalDecision.ASK));
+
+        assertNull(rule.toolName());
+        assertNull(rule.operation());
     }
 
     @Test
-    void rejectsInvalidToolPatternAtConstruction() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new ApprovalRule("[", ".*", ApprovalDecision.ALLOW));
+    void acceptsExactToolAndOperation() {
+        ApprovalRule rule = new ApprovalRule("git", "commit", ApprovalDecision.ASK);
+
+        assertEquals("git", rule.toolName());
+        assertEquals("commit", rule.operation());
     }
 
     @Test
-    void rejectsInvalidArgumentsPatternAtConstruction() {
+    void rejectsNullDecision() {
         assertThrows(
-                IllegalArgumentException.class,
-                () -> new ApprovalRule("git", "[", ApprovalDecision.ALLOW));
+                NullPointerException.class,
+                () -> new ApprovalRule("file", "write", null));
     }
 }

@@ -1,26 +1,22 @@
 package cn.yhjyhj.weaver.core.approval;
 
 import java.util.Objects;
-import java.util.regex.Pattern;
 
-/** 一条审批规则；toolPattern 为工具名正则，argsPattern 为参数 JSON 正则。 */
-public record ApprovalRule(
-        String toolPattern, String argsPattern, ApprovalDecision decision) {
+/**
+ * 一条审批规则。
+ *
+ * @param toolName 精确匹配的工具名；null 表示任意工具
+ * @param operation 匹配 argumentsJson 中 op 字段的值；null 表示任意操作
+ * @param decision 命中后的基础决策
+ */
+public record ApprovalRule(String toolName, String operation, ApprovalDecision decision) {
 
     /**
-     * 创建并校验审批规则。
+     * 创建审批规则。
      *
-     * @param toolPattern 完整匹配工具名的正则
-     * @param argsPattern 完整匹配原始参数 JSON 的正则
-     * @param decision 两个正则均命中时的基础决策
-     * @throws IllegalArgumentException 任一正则非法时抛出
+     * @throws NullPointerException decision 为 null 时抛出
      */
     public ApprovalRule {
-        Objects.requireNonNull(toolPattern, "toolPattern");
-        Objects.requireNonNull(argsPattern, "argsPattern");
         Objects.requireNonNull(decision, "decision");
-        // 在边界处立即暴露配置错误，避免会话执行到工具调用时才发现。
-        Pattern.compile(toolPattern);
-        Pattern.compile(argsPattern);
     }
 }
