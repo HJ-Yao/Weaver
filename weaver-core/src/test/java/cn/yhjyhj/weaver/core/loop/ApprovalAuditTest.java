@@ -178,10 +178,10 @@ class ApprovalAuditTest {
         context.setPendingToolCalls(List.of(calls));
         ActNode node = new ActNode(
                 new ToolRegistry(List.of(tool("git"), tool("file"), tool("shell"))),
-                (request, ignored) -> null,
                 policy,
                 gate,
-                grants);
+                grants,
+                (request, ignored) -> null);
 
         assertNull(node.apply(
                 new RunRequest(SESSION_ID, "input", 0), context));

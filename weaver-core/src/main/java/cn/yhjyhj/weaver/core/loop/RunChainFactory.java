@@ -75,7 +75,7 @@ public final class RunChainFactory {
             ApprovalGrantStore grants) {
         ObserveNode observe = new ObserveNode();
         ActNode act = new ActNode(
-                registry, observe, approvalPolicy, approvalGate, grants);
+                registry, approvalPolicy, approvalGate, grants, observe);
         ReasonNode reason = new ReasonNode(model, registry, act, observe);
         IntentNode intent = new IntentNode(reason);
         return new ContextNode(store, intent, reason);

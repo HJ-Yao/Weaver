@@ -398,10 +398,10 @@ class ActNodeTest {
                 new StreamChunk.ToolCall("call-1", "timed", "{}")));
         ActNode node = new ActNode(
                 new ToolRegistry(List.of(timed)),
-                (request, ignored) -> null,
                 ALLOW_ALL,
                 ApprovalGate.denyAll(),
-                ApprovalGrantStore.none());
+                ApprovalGrantStore.none(),
+                (request, ignored) -> null);
 
         assertNull(node.apply(new RunRequest("session", "input", 0), context));
 
@@ -477,10 +477,10 @@ class ActNodeTest {
         context.setPendingToolCalls(List.of(calls));
         ActNode node = new ActNode(
                 registry,
-                (request, ignored) -> null,
                 policy,
                 gate,
-                ApprovalGrantStore.none());
+                ApprovalGrantStore.none(),
+                (request, ignored) -> null);
 
         assertNull(node.apply(new RunRequest("session", "input", 0), context));
         assertTrue(context.getPendingToolCalls().isEmpty());
