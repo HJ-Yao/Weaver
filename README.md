@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/weaver-logo.svg" width="180" alt="Weft, the Weaver mascot">
+</p>
+
 # Weaver
 
 **Weave models, tools and context into action.** A Java-based AI agent harness.
@@ -17,18 +21,19 @@
 
 | Module | Role |
 |---|---|
-| `weaver-core` | Hand-written agent engine (strategy chain, state machine, event stream). Zero framework deps. |
+| `weaver-core` | Hand-written agent engine (ReAct strategy chain, state machine, event stream). No Spring or agent-framework dependencies. |
 | `weaver-plugins` | Plugin contract: SPI / Node bridge / MCP tool shapes. |
 | `weaver-mcp` | MCP client integration (official Java SDK). |
-| `weaver-server` | Spring Boot app: REST API, SSE streaming, MySQL persistence. |
+| `weaver-server` | Spring Boot app: REST + SSE, SQLite event store, OpenAI-compatible and Anthropic model clients. |
 | `weaver-cli` | Command-line entrypoint (thin shell over the core). |
-| `weaver-ui` | React frontend (chat UI). |
+| `weaver-ui` | React frontend (planned). |
 
 ## Development
 
 ```bash
 mvn -q compile        # build all Java modules
 mvn -q test           # run tests
+mvn -q verify         # tests + JaCoCo branch coverage gate
 ```
 
 Rules for AI agents working on this repo: [AGENTS.md](AGENTS.md).

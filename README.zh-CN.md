@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/weaver-logo.svg" width="180" alt="Weft，Weaver 吉祥物">
+</p>
+
 # Weaver
 
 **将模型、工具与上下文编织成行动。** 一个基于 Java 的 AI Agent 运行时框架。
@@ -17,18 +21,19 @@ English | [简体中文](README.zh-CN.md)
 
 | 模块 | 职责 |
 |---|---|
-| `weaver-core` | 自研核心引擎（策略链、状态机、事件流），零框架依赖 |
+| `weaver-core` | 自研核心引擎（ReAct 策略链、状态机、事件流），不依赖 Spring 或 Agent 框架 |
 | `weaver-plugins` | 插件契约：SPI / Node 桥接 / MCP 工具形态 |
 | `weaver-mcp` | MCP 客户端接入（官方 Java SDK） |
-| `weaver-server` | Spring Boot 应用：REST API、SSE 流式、MySQL 持久化 |
+| `weaver-server` | Spring Boot 应用：REST + SSE、SQLite 事件存储、OpenAI 兼容与 Anthropic 模型客户端 |
 | `weaver-cli` | 命令行入口（核心之上的薄壳） |
-| `weaver-ui` | React 前端（聊天界面） |
+| `weaver-ui` | React 前端（计划中） |
 
 ## 开发
 
 ```bash
 mvn -q compile        # 编译全部模块
 mvn -q test           # 运行测试
+mvn -q verify         # 测试 + JaCoCo 分支覆盖率门槛
 ```
 
 AI 协作规范见 [AGENTS.md](AGENTS.md)。

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Weft, the Weaver mascot: a tarantula facing upper-left, weaving event threads">
+  <defs>
+    <linearGradient id="weaver-body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F0CC6A"/>
+      <stop offset="1" stop-color="#B8862A"/>
+    </linearGradient>
+    <linearGradient id="weaver-thread" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#A8C7FF"/>
+      <stop offset="1" stop-color="#4F7DFF"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="256" height="256" rx="56" fill="#0B0F14"/>
+
+  <!-- Event threads: one line per stream, nodes are SessionEvents. -->
+  <g stroke="url(#weaver-thread)" stroke-width="1.6" fill="none" opacity="0.6">
+    <path d="M18 26 L118 104 L238 226"/>
+    <path d="M24 82 L104 104 L176 18"/>
+    <path d="M28 16 L104 104 L226 136"/>
+  </g>
+  <g fill="#9DBBFF">
+    <circle cx="54" cy="58" r="3"/>
+    <circle cx="146" cy="132" r="2.4"/>
+    <circle cx="198" cy="188" r="3"/>
+    <circle cx="78" cy="36" r="2.2"/>
+    <circle cx="124" cy="70" r="2.2"/>
+    <circle cx="170" cy="58" r="2"/>
+  </g>
+
+  <!-- Eight legs: four per side, two joints each, tarantula weight. -->
+  <g stroke="#C29232" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M92 92 L60 50 L30 34"/>
+    <path d="M88 100 L42 82 L18 88"/>
+    <path d="M92 112 L54 138 L34 168"/>
+    <path d="M102 120 L86 164 L94 196"/>
+    <path d="M108 90 L122 44 L146 22"/>
+    <path d="M116 96 L168 66 L198 70"/>
+    <path d="M116 110 L170 128 L194 158"/>
+    <path d="M118 120 L138 164 L154 190"/>
+  </g>
+
+  <!-- Abdomen carries the woven lattice. -->
+  <ellipse cx="152" cy="152" rx="28" ry="34" transform="rotate(-45 152 152)" fill="url(#weaver-body)"/>
+  <g stroke="#0B0F14" stroke-width="1.6" opacity="0.5" fill="none" transform="rotate(-45 152 152)">
+    <path d="M139 139 L165 139 L178 152 L165 165 L139 165 L126 152 Z"/>
+    <path d="M146 146 L158 146 L165 152 L158 158 L146 158 L139 152 Z"/>
+  </g>
+
+  <!-- Cephalothorax and eyes face upper-left, toward the input. -->
+  <ellipse cx="104" cy="104" rx="20" ry="23" transform="rotate(-45 104 104)" fill="#F0CC6A"/>
+  <g fill="#0B0F14">
+    <circle cx="93" cy="91" r="3.6"/>
+    <circle cx="102" cy="85" r="2.6"/>
+  </g>
+</svg>
