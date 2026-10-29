@@ -1,9 +1,5 @@
 package cn.yhjyhj.weaver.core.loop;
 
-import cn.yhjyhj.weaver.core.approval.ApprovalGate;
-import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
-import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
-import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.loop.chain.StrategyHandler;
@@ -12,10 +8,8 @@ import cn.yhjyhj.weaver.core.loop.context.RunContext;
 import cn.yhjyhj.weaver.core.loop.context.RunRequest;
 import cn.yhjyhj.weaver.core.loop.context.StepResult;
 import cn.yhjyhj.weaver.core.model.ModelClient;
-import cn.yhjyhj.weaver.core.model.StreamChunk;
-import cn.yhjyhj.weaver.core.model.StreamSink;
 import cn.yhjyhj.weaver.core.phase.Phase;
-import cn.yhjyhj.weaver.core.tool.ToolRegistry;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 
@@ -28,182 +22,38 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class RunLoop {
 
-    private final ApprovalPolicy approvalPolicy; // 工具调用审批策略
-    private final ApprovalGate approvalGate; // ASK 时等待用户答复的闸门
-    private final ApprovalGrantStore approvalGrants; // 本会话授权记录
-
     /** 单轮默认最大步数；达到上限按中止处理。 */
-    public static final int DEFAULT_MAX_STEPS = 50;
-
-    /** 未注入实时输出出口时使用的空实现。 */
-    private static final StreamSink NO_OP_STREAM_SINK = new StreamSink() {
-        @Override
-        public void onDelta(String delta) {}
-
-        @Override
-        public void onToolCall(StreamChunk.ToolCall call) {}
-
-        @Override
-        public void onDone(StreamChunk.StopReason reason) {}
-    };
+    public static final int DEFAULT_MAX_STEPS = RunLoopConfig.DEFAULT_MAX_STEPS;
 
     private final ModelClient model; // 模型调用边界
     private final SessionEventStore store; // 会话事实源
-    private final int maxSteps; // 本次运行允许执行的最大步数
-    private final StreamSink streamSink; // 模型文本与工具调用的实时输出出口
-    private final ToolRegistry toolRegistry; // 本循环可执行的工具集合
+    private final RunLoopConfig config; // 本次运行的步数、流式出口与协作者
     /** 当前运行是否收到取消请求；每次 run 开始时重置。 */
     private final AtomicBoolean cancelled = new AtomicBoolean();
     /** 最近一次运行收敛后的阶段；run 返回后由调用线程读取。 */
     private volatile Phase finalPhase;
 
     /**
-     * 使用默认步数上限创建运行循环。
+     * 使用默认配置创建运行循环。
      *
      * @param model 模型调用边界
      * @param store 会话事件存储
      */
     public RunLoop(ModelClient model, SessionEventStore store) {
-        this(model, store, DEFAULT_MAX_STEPS, NO_OP_STREAM_SINK, ToolRegistry.empty());
+        this(model, store, RunLoopConfig.defaults());
     }
 
     /**
-     * 使用默认步数上限和指定工具注册表创建运行循环。
+     * 使用显式配置创建运行循环。
      *
      * @param model 模型调用边界
      * @param store 会话事件存储
-     * @param toolRegistry 工具注册表
+     * @param config 单轮步数、流式出口与协作者配置
      */
-    public RunLoop(ModelClient model, SessionEventStore store, ToolRegistry toolRegistry) {
-        this(model, store, DEFAULT_MAX_STEPS, NO_OP_STREAM_SINK, toolRegistry);
-    }
-
-    /**
-     * 使用默认步数上限、工具注册表与显式审批依赖创建运行循环。
-     *
-     * @param model 模型调用边界
-     * @param store 会话事件存储
-     * @param toolRegistry 工具注册表
-     * @param approvalPolicy 工具调用审批策略
-     * @param approvalGate ASK 时等待用户答复的闸门
-     * @param approvalGrants 本会话授权记录
-     */
-    public RunLoop(
-            ModelClient model,
-            SessionEventStore store,
-            ToolRegistry toolRegistry,
-            ApprovalPolicy approvalPolicy,
-            ApprovalGate approvalGate,
-            ApprovalGrantStore approvalGrants) {
-        this(
-                model,
-                store,
-                DEFAULT_MAX_STEPS,
-                NO_OP_STREAM_SINK,
-                toolRegistry,
-                approvalPolicy,
-                approvalGate,
-                approvalGrants);
-    }
-
-    /**
-     * 创建具有指定步数上限的运行循环。
-     *
-     * @param model 模型调用边界
-     * @param store 会话事件存储
-     * @param maxSteps 单轮最大步数
-     */
-    public RunLoop(ModelClient model, SessionEventStore store, int maxSteps) {
-        this(model, store, maxSteps, NO_OP_STREAM_SINK, ToolRegistry.empty());
-    }
-
-    /**
-     * 创建具有指定步数上限和工具注册表的运行循环。
-     *
-     * @param model 模型调用边界
-     * @param store 会话事件存储
-     * @param maxSteps 单轮最大步数
-     * @param toolRegistry 工具注册表
-     */
-    public RunLoop(
-            ModelClient model,
-            SessionEventStore store,
-            int maxSteps,
-            ToolRegistry toolRegistry) {
-        this(model, store, maxSteps, NO_OP_STREAM_SINK, toolRegistry);
-    }
-
-    /**
-     * 创建具有指定步数上限和实时输出出口的运行循环。
-     *
-     * @param model 模型调用边界
-     * @param store 会话事件存储
-     * @param maxSteps 单轮最大步数
-     * @param streamSink 模型文本与工具调用的实时输出出口
-     */
-    public RunLoop(
-            ModelClient model,
-            SessionEventStore store,
-            int maxSteps,
-            StreamSink streamSink) {
-        this(model, store, maxSteps, streamSink, ToolRegistry.empty());
-    }
-
-    /**
-     * 创建具有指定步数上限、实时输出出口和工具注册表的运行循环。
-     *
-     * @param model 模型调用边界
-     * @param store 会话事件存储
-     * @param maxSteps 单轮最大步数
-     * @param streamSink 模型文本与工具调用的实时输出出口
-     * @param toolRegistry 工具注册表
-     */
-    public RunLoop(
-            ModelClient model,
-            SessionEventStore store,
-            int maxSteps,
-            StreamSink streamSink,
-            ToolRegistry toolRegistry) {
-        this(
-                model,
-                store,
-                maxSteps,
-                streamSink,
-                toolRegistry,
-                RuleBasedApprovalPolicy.defaults(),
-                ApprovalGate.denyAll(),
-                ApprovalGrantStore.none());
-    }
-
-    /**
-     * 创建具有完整运行参数与审批依赖的运行循环。
-     *
-     * @param model 模型调用边界
-     * @param store 会话事件存储
-     * @param maxSteps 单轮最大步数
-     * @param streamSink 模型文本与工具调用的实时输出出口
-     * @param toolRegistry 工具注册表
-     * @param approvalPolicy 工具调用审批策略
-     * @param approvalGate ASK 时等待用户答复的闸门
-     * @param approvalGrants 本会话授权记录
-     */
-    public RunLoop(
-            ModelClient model,
-            SessionEventStore store,
-            int maxSteps,
-            StreamSink streamSink,
-            ToolRegistry toolRegistry,
-            ApprovalPolicy approvalPolicy,
-            ApprovalGate approvalGate,
-            ApprovalGrantStore approvalGrants) {
+    public RunLoop(ModelClient model, SessionEventStore store, RunLoopConfig config) {
         this.model = model;
         this.store = store;
-        this.maxSteps = maxSteps;
-        this.streamSink = streamSink;
-        this.toolRegistry = toolRegistry;
-        this.approvalPolicy = approvalPolicy;
-        this.approvalGate = approvalGate;
-        this.approvalGrants = approvalGrants;
+        this.config = Objects.requireNonNull(config, "config");
     }
 
     /**
@@ -233,17 +83,17 @@ public final class RunLoop {
                 RunChainFactory.assemble(
                         store,
                         model,
-                        toolRegistry,
-                        approvalPolicy,
-                        approvalGate,
-                        approvalGrants);
+                        config.toolRegistry(),
+                        config.approvalPolicy(),
+                        config.approvalGate(),
+                        config.approvalGrants());
         Phase.Running phase = Phase.idle().start();
         boolean aborted = false;
 
         try {
             // 步数从 0 开始计数，取消和上限都在执行下一步前检查。
-            while (phase.step() < maxSteps && !cancelled.get()) {
-                RunContext context = new RunContext(sessionId, sink, streamSink);
+            while (phase.step() < config.maxSteps() && !cancelled.get()) {
+                RunContext context = new RunContext(sessionId, sink, config.streamSink());
                 StepResult result = root.apply(
                         new RunRequest(sessionId, input, phase.step()), context);
                 // 取消可能发生在单步内部，需在推进前优先识别并记录中止。
@@ -257,7 +107,7 @@ public final class RunLoop {
                 phase = phase.nextStep();
             }
             // 自然结束后再检查取消与上限，覆盖循环退出时刚好触发的边界条件。
-            aborted = aborted || cancelled.get() || phase.step() >= maxSteps;
+            aborted = aborted || cancelled.get() || phase.step() >= config.maxSteps();
         } catch (Exception exception) {
             // 统一把异常收敛为中止，保证每次 run 都有终态和 RunFinished 事实。
             log.error("run failed: session={}", sessionId, exception);

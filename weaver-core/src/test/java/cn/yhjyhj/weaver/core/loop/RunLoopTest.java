@@ -9,6 +9,7 @@ import cn.yhjyhj.weaver.core.approval.ApprovalGate;
 import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.approval.ApprovalResult;
+import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.StoredEvent;
@@ -66,7 +67,16 @@ class RunLoopTest {
                 call -> sinkEvents.add("tool:" + call.callId()),
                 reason -> sinkEvents.add("done:" + reason));
 
-        new RunLoop(model, store, RunLoop.DEFAULT_MAX_STEPS, streamSink)
+        new RunLoop(
+                        model,
+                        store,
+                        new RunLoopConfig(
+                                RunLoop.DEFAULT_MAX_STEPS,
+                                streamSink,
+                                ToolRegistry.empty(),
+                                RuleBasedApprovalPolicy.defaults(),
+                                ApprovalGate.denyAll(),
+                                ApprovalGrantStore.none()))
                 .run(SESSION_ID, "你好");
 
         assertEquals(List.of("a", "b", "done:STOP"), sinkEvents);
@@ -89,10 +99,11 @@ class RunLoopTest {
         new RunLoop(
                         model,
                         store,
-                        fileRegistry(),
-                        ALLOW_ALL,
-                        ApprovalGate.denyAll(),
-                        ApprovalGrantStore.none())
+                        config(
+                                fileRegistry(),
+                                ALLOW_ALL,
+                                ApprovalGate.denyAll(),
+                                ApprovalGrantStore.none()))
                 .run(SESSION_ID, "读取 x");
 
         assertTrue(events(store).contains(
@@ -130,10 +141,11 @@ class RunLoopTest {
         new RunLoop(
                         model,
                         store,
-                        fileRegistry(),
-                        ALLOW_ALL,
-                        ApprovalGate.denyAll(),
-                        ApprovalGrantStore.none())
+                        config(
+                                fileRegistry(),
+                                ALLOW_ALL,
+                                ApprovalGate.denyAll(),
+                                ApprovalGrantStore.none()))
                 .run(SESSION_ID, "读取 x");
 
         assertEquals(List.of(
@@ -159,7 +171,7 @@ class RunLoopTest {
                         new StreamChunk.Text("denied"),
                         new StreamChunk.Done(StreamChunk.StopReason.STOP))), null);
 
-        new RunLoop(model, store, fileRegistry()).run(SESSION_ID, "读取 x");
+        new RunLoop(model, store, config(fileRegistry())).run(SESSION_ID, "读取 x");
 
         SessionEvent.ToolCallCompleted completed = events(store).stream()
                 .filter(SessionEvent.ToolCallCompleted.class::isInstance)
@@ -195,7 +207,7 @@ class RunLoopTest {
                 new StreamChunk.ToolCall("call-1", "file", "read x"),
                 new StreamChunk.Done(StreamChunk.StopReason.STOP));
         ScriptedModelClient model = new ScriptedModelClient(List.of(), repeatingToolResponse);
-        RunLoop runLoop = new RunLoop(model, store, 3);
+        RunLoop runLoop = new RunLoop(model, store, config(3, ToolRegistry.empty()));
 
         runLoop.run(SESSION_ID, "读取 x");
 
@@ -272,7 +284,7 @@ class RunLoopTest {
                 specifiedTool("zeta", "last"),
                 specifiedTool("alpha", "first")));
 
-        new RunLoop(model, store, registry).run(SESSION_ID, "hello");
+        new RunLoop(model, store, config(registry)).run(SESSION_ID, "hello");
 
         assertEquals(List.of(
                 new ToolSpec("alpha", "first", "{\"type\":\"object\"}"),
@@ -300,6 +312,43 @@ class RunLoopTest {
                 onDone.accept(reason);
             }
         };
+    }
+
+    private static RunLoopConfig config(ToolRegistry toolRegistry) {
+        RunLoopConfig defaults = RunLoopConfig.defaults();
+        return new RunLoopConfig(
+                defaults.maxSteps(),
+                defaults.streamSink(),
+                toolRegistry,
+                defaults.approvalPolicy(),
+                defaults.approvalGate(),
+                defaults.approvalGrants());
+    }
+
+    private static RunLoopConfig config(
+            ToolRegistry toolRegistry,
+            ApprovalPolicy approvalPolicy,
+            ApprovalGate approvalGate,
+            ApprovalGrantStore approvalGrants) {
+        RunLoopConfig defaults = RunLoopConfig.defaults();
+        return new RunLoopConfig(
+                defaults.maxSteps(),
+                defaults.streamSink(),
+                toolRegistry,
+                approvalPolicy,
+                approvalGate,
+                approvalGrants);
+    }
+
+    private static RunLoopConfig config(int maxSteps, ToolRegistry toolRegistry) {
+        RunLoopConfig defaults = RunLoopConfig.defaults();
+        return new RunLoopConfig(
+                maxSteps,
+                defaults.streamSink(),
+                toolRegistry,
+                defaults.approvalPolicy(),
+                defaults.approvalGate(),
+                defaults.approvalGrants());
     }
 
     private static List<StreamChunk> response(StreamChunk... chunks) {

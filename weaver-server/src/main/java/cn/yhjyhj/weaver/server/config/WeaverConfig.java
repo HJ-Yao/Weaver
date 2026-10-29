@@ -12,8 +12,12 @@ import cn.yhjyhj.weaver.core.tool.builtin.GitTool;
 import cn.yhjyhj.weaver.core.tool.builtin.ShellTool;
 import cn.yhjyhj.weaver.server.model.AnthropicMessagesModelClient;
 import cn.yhjyhj.weaver.server.model.OpenAiChatCompletionsModelClient;
+import cn.yhjyhj.weaver.server.service.RunService;
+import cn.yhjyhj.weaver.server.service.RunServiceDependencies;
+import cn.yhjyhj.weaver.server.service.SessionService;
 import cn.yhjyhj.weaver.server.store.SqliteEventStore;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -66,6 +70,39 @@ public class WeaverConfig {
     @Bean
     public ApprovalGrantStore approvalGrantStore() {
         return new InMemoryApprovalGrantStore();
+    }
+
+    /**
+     * 使用进程级依赖与应用配置创建运行服务。
+     *
+     * @param sessions 会话元数据服务
+     * @param eventStore 会话事件事实源
+     * @param model 模型客户端
+     * @param tools 工具注册表
+     * @param approvalPolicy 工具审批策略
+     * @param approvalGrants 会话审批授权记录
+     * @param properties Weaver 运行配置
+     * @return 单例运行服务
+     */
+    @Bean
+    public RunService runService(
+            SessionService sessions,
+            SessionEventStore eventStore,
+            ModelClient model,
+            ToolRegistry tools,
+            ApprovalPolicy approvalPolicy,
+            ApprovalGrantStore approvalGrants,
+            WeaverProperties properties) {
+        return new RunService(new RunServiceDependencies(
+                sessions,
+                eventStore,
+                model,
+                tools,
+                approvalPolicy,
+                approvalGrants,
+                properties.maxSteps(),
+                Duration.ofSeconds(properties.approval().timeoutSeconds()),
+                RunServiceDependencies.defaultEmitterFactory()));
     }
 
     /**

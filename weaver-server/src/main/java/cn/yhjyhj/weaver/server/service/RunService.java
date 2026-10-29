@@ -4,9 +4,9 @@ import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.loop.RunLoop;
+import cn.yhjyhj.weaver.core.loop.RunLoopConfig;
 import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
-import cn.yhjyhj.weaver.server.config.WeaverProperties;
 import cn.yhjyhj.weaver.server.sse.SseApprovalGate;
 import cn.yhjyhj.weaver.server.sse.SseChannel;
 import cn.yhjyhj.weaver.server.sse.SseStreamSink;
@@ -16,16 +16,13 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /** 为每次消息请求装配独立 RunLoop，并把实时输出桥接到 SSE。 */
 @Slf4j
-@Service
-public class RunService {
+public final class RunService {
 
     private final SessionService sessions; // 会话存在性边界
     private final SessionEventStore eventStore; // 运行事实源
@@ -40,83 +37,22 @@ public class RunService {
             new ConcurrentHashMap<>();
 
     /**
-     * 使用应用配置创建运行服务。
+     * 使用进程级协作者与单次运行参数创建运行服务。
      *
-     * @param sessions 会话元数据服务
-     * @param eventStore 会话事件事实源
-     * @param model 模型客户端
-     * @param tools 工具注册表
-     * @param approvalPolicy 工具审批策略
-     * @param approvalGrants 会话审批授权记录
-     * @param properties Weaver 运行配置
+     * @param dependencies 会话、模型、工具、审批与 SSE 依赖
      */
-    @Autowired
-    public RunService(
-            SessionService sessions,
-            SessionEventStore eventStore,
-            ModelClient model,
-            ToolRegistry tools,
-            ApprovalPolicy approvalPolicy,
-            ApprovalGrantStore approvalGrants,
-            WeaverProperties properties) {
-        this(
-                sessions,
-                eventStore,
-                model,
-                tools,
-                approvalPolicy,
-                approvalGrants,
-                properties.maxSteps(),
-                approvalTimeout(properties),
-                () -> new SseEmitter(0L));
-    }
-
-    RunService(
-            SessionService sessions,
-            SessionEventStore eventStore,
-            ModelClient model,
-            ToolRegistry tools,
-            ApprovalPolicy approvalPolicy,
-            ApprovalGrantStore approvalGrants,
-            WeaverProperties properties,
-            Supplier<SseEmitter> emitterFactory) {
-        this(
-                sessions,
-                eventStore,
-                model,
-                tools,
-                approvalPolicy,
-                approvalGrants,
-                properties.maxSteps(),
-                approvalTimeout(properties),
-                emitterFactory);
-    }
-
-    private RunService(
-            SessionService sessions,
-            SessionEventStore eventStore,
-            ModelClient model,
-            ToolRegistry tools,
-            ApprovalPolicy approvalPolicy,
-            ApprovalGrantStore approvalGrants,
-            int maxSteps,
-            Duration approvalTimeout,
-            Supplier<SseEmitter> emitterFactory) {
-        this.sessions = Objects.requireNonNull(sessions, "sessions");
-        this.eventStore = Objects.requireNonNull(eventStore, "eventStore");
-        this.model = Objects.requireNonNull(model, "model");
-        this.tools = Objects.requireNonNull(tools, "tools");
-        this.approvalPolicy = Objects.requireNonNull(approvalPolicy, "approvalPolicy");
-        this.approvalGrants = Objects.requireNonNull(approvalGrants, "approvalGrants");
-        if (maxSteps <= 0) {
-            throw new IllegalArgumentException("maxSteps must be positive");
-        }
-        this.maxSteps = maxSteps;
-        this.approvalTimeout = Objects.requireNonNull(approvalTimeout, "approvalTimeout");
-        if (approvalTimeout.isNegative()) {
-            throw new IllegalArgumentException("approvalTimeout must not be negative");
-        }
-        this.emitterFactory = Objects.requireNonNull(emitterFactory, "emitterFactory");
+    public RunService(RunServiceDependencies dependencies) {
+        RunServiceDependencies validatedDependencies =
+                Objects.requireNonNull(dependencies, "dependencies");
+        this.sessions = validatedDependencies.sessions();
+        this.eventStore = validatedDependencies.eventStore();
+        this.model = validatedDependencies.model();
+        this.tools = validatedDependencies.tools();
+        this.approvalPolicy = validatedDependencies.approvalPolicy();
+        this.approvalGrants = validatedDependencies.approvalGrants();
+        this.maxSteps = validatedDependencies.maxSteps();
+        this.approvalTimeout = validatedDependencies.approvalTimeout();
+        this.emitterFactory = validatedDependencies.emitterFactory();
     }
 
     /**
@@ -195,12 +131,13 @@ public class RunService {
             new RunLoop(
                             model,
                             eventStore,
-                            maxSteps,
-                            streamSink,
-                            tools,
-                            approvalPolicy,
-                            gate,
-                            approvalGrants)
+                            new RunLoopConfig(
+                                    maxSteps,
+                                    streamSink,
+                                    tools,
+                                    approvalPolicy,
+                                    gate,
+                                    approvalGrants))
                     .run(sessionId, content);
             emitter.complete();
         } catch (Exception exception) {
@@ -214,15 +151,6 @@ public class RunService {
             }
             emitter.completeWithError(exception);
         }
-    }
-
-    private static Duration approvalTimeout(WeaverProperties properties) {
-        Objects.requireNonNull(properties, "properties");
-        int timeoutSeconds = properties.approval().timeoutSeconds();
-        if (timeoutSeconds <= 0) {
-            throw new IllegalArgumentException("approval timeout must be positive");
-        }
-        return Duration.ofSeconds(timeoutSeconds);
     }
 
     private static ResponseStatusException conflict(String sessionId) {

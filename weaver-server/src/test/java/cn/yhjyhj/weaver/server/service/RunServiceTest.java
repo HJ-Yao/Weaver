@@ -10,6 +10,7 @@ import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
+import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionSnapshot;
 import cn.yhjyhj.weaver.core.events.SessionEvents;
 import cn.yhjyhj.weaver.core.events.StoredEvent;
@@ -20,9 +21,7 @@ import cn.yhjyhj.weaver.core.tool.Reversibility;
 import cn.yhjyhj.weaver.core.tool.Tool;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import cn.yhjyhj.weaver.server.api.dto.SessionSummary;
-import cn.yhjyhj.weaver.server.config.WeaverProperties;
 import cn.yhjyhj.weaver.server.model.EchoModelClient;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -32,6 +31,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
@@ -51,15 +51,13 @@ class RunServiceTest {
             executedOnVirtualThread.set(Thread.currentThread().isVirtual());
             return echo.stream(request);
         };
-        RunService service = new RunService(
+        RunService service = new RunService(dependencies(
                 sessions,
                 store,
                 virtualThreadProbe,
                 ToolRegistry.empty(),
-                RuleBasedApprovalPolicy.defaults(),
-                ApprovalGrantStore.none(),
-                properties(300),
-                () -> emitter);
+                300,
+                () -> emitter));
 
         SseEmitter returned = service.run(summary.id(), "hello");
 
@@ -83,14 +81,8 @@ class RunServiceTest {
     void rejectsUnknownSessionBeforeCreatingEmitter() {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
         SessionService sessions = new SessionService(store);
-        RunService service = new RunService(
-                sessions,
-                store,
-                new EchoModelClient(),
-                ToolRegistry.empty(),
-                RuleBasedApprovalPolicy.defaults(),
-                ApprovalGrantStore.none(),
-                properties(300));
+        RunService service = new RunService(dependencies(
+                sessions, store, new EchoModelClient(), ToolRegistry.empty(), 300));
 
         ResponseStatusException thrown = assertThrows(
                 ResponseStatusException.class,
@@ -105,15 +97,13 @@ class RunServiceTest {
         SessionService sessions = new SessionService(store);
         SessionSummary summary = sessions.create("Approval");
         RecordingEmitter emitter = new RecordingEmitter();
-        RunService service = new RunService(
+        RunService service = new RunService(dependencies(
                 sessions,
                 store,
                 approvalThenResponseModel(),
                 new ToolRegistry(List.of(approvalTool())),
-                RuleBasedApprovalPolicy.defaults(),
-                ApprovalGrantStore.none(),
-                properties(5),
-                () -> emitter);
+                5,
+                () -> emitter));
 
         service.run(summary.id(), "hello");
 
@@ -136,14 +126,8 @@ class RunServiceTest {
     void returnsFalseWhenResolvingForUnknownActiveGate() {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
         SessionService sessions = new SessionService(store);
-        RunService service = new RunService(
-                sessions,
-                store,
-                new EchoModelClient(),
-                ToolRegistry.empty(),
-                RuleBasedApprovalPolicy.defaults(),
-                ApprovalGrantStore.none(),
-                properties(300));
+        RunService service = new RunService(dependencies(
+                sessions, store, new EchoModelClient(), ToolRegistry.empty(), 300));
 
         assertFalse(service.resolveApproval("missing-session", "call-1", true));
     }
@@ -166,15 +150,13 @@ class RunServiceTest {
             }
             return echo.stream(request);
         };
-        RunService service = new RunService(
+        RunService service = new RunService(dependencies(
                 sessions,
                 store,
                 blockingModel,
                 ToolRegistry.empty(),
-                RuleBasedApprovalPolicy.defaults(),
-                ApprovalGrantStore.none(),
-                properties(5),
-                () -> emitter);
+                5,
+                () -> emitter));
 
         service.run(summary.id(), "hello");
         assertTrue(modelStarted.await(2, TimeUnit.SECONDS));
@@ -211,15 +193,13 @@ class RunServiceTest {
         SessionService sessions = new SessionService(store);
         SessionSummary summary = sessions.create("Disconnect");
         RecordingEmitter emitter = new RecordingEmitter();
-        RunService service = new RunService(
+        RunService service = new RunService(dependencies(
                 sessions,
                 store,
                 approvalThenResponseModel(),
                 new ToolRegistry(List.of(approvalTool())),
-                RuleBasedApprovalPolicy.defaults(),
-                ApprovalGrantStore.none(),
-                properties(30),
-                () -> emitter);
+                30,
+                () -> emitter));
 
         service.run(summary.id(), "hello");
         terminate.accept(emitter);
@@ -237,15 +217,38 @@ class RunServiceTest {
                 snapshot.toolCalls().getFirst().result().content());
     }
 
-    private static WeaverProperties properties(int approvalTimeoutSeconds) {
-        WeaverProperties defaults =
-                new WeaverProperties(Path.of("."), 10, Path.of("target", "run-service.db"));
-        return new WeaverProperties(
-                defaults.workspace(),
-                defaults.maxSteps(),
-                defaults.storePath(),
-                defaults.model(),
-                new WeaverProperties.ApprovalProperties(approvalTimeoutSeconds));
+    private static RunServiceDependencies dependencies(
+            SessionService sessions,
+            SessionEventStore store,
+            ModelClient model,
+            ToolRegistry tools,
+            int approvalTimeoutSeconds) {
+        return dependencies(
+                sessions,
+                store,
+                model,
+                tools,
+                approvalTimeoutSeconds,
+                RunServiceDependencies.defaultEmitterFactory());
+    }
+
+    private static RunServiceDependencies dependencies(
+            SessionService sessions,
+            SessionEventStore store,
+            ModelClient model,
+            ToolRegistry tools,
+            int approvalTimeoutSeconds,
+            Supplier<SseEmitter> emitterFactory) {
+        return new RunServiceDependencies(
+                sessions,
+                store,
+                model,
+                tools,
+                RuleBasedApprovalPolicy.defaults(),
+                ApprovalGrantStore.none(),
+                10,
+                Duration.ofSeconds(approvalTimeoutSeconds),
+                emitterFactory);
     }
 
     private static ModelClient approvalThenResponseModel() {
