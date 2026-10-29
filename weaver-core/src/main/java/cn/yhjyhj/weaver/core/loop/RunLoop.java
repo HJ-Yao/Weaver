@@ -1,6 +1,7 @@
 package cn.yhjyhj.weaver.core.loop;
 
 import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
@@ -29,6 +30,7 @@ public final class RunLoop {
 
     private final ApprovalPolicy approvalPolicy; // 工具调用审批策略
     private final ApprovalGate approvalGate; // ASK 时等待用户答复的闸门
+    private final ApprovalGrantStore approvalGrants; // 本会话授权记录
 
     /** 单轮默认最大步数；达到上限按中止处理。 */
     public static final int DEFAULT_MAX_STEPS = 50;
@@ -84,13 +86,15 @@ public final class RunLoop {
      * @param toolRegistry 工具注册表
      * @param approvalPolicy 工具调用审批策略
      * @param approvalGate ASK 时等待用户答复的闸门
+     * @param approvalGrants 本会话授权记录
      */
     public RunLoop(
             ModelClient model,
             SessionEventStore store,
             ToolRegistry toolRegistry,
             ApprovalPolicy approvalPolicy,
-            ApprovalGate approvalGate) {
+            ApprovalGate approvalGate,
+            ApprovalGrantStore approvalGrants) {
         this(
                 model,
                 store,
@@ -98,7 +102,8 @@ public final class RunLoop {
                 NO_OP_STREAM_SINK,
                 toolRegistry,
                 approvalPolicy,
-                approvalGate);
+                approvalGate,
+                approvalGrants);
     }
 
     /**
@@ -166,7 +171,8 @@ public final class RunLoop {
                 streamSink,
                 toolRegistry,
                 RuleBasedApprovalPolicy.defaults(),
-                ApprovalGate.denyAll());
+                ApprovalGate.denyAll(),
+                ApprovalGrantStore.none());
     }
 
     /**
@@ -179,6 +185,7 @@ public final class RunLoop {
      * @param toolRegistry 工具注册表
      * @param approvalPolicy 工具调用审批策略
      * @param approvalGate ASK 时等待用户答复的闸门
+     * @param approvalGrants 本会话授权记录
      */
     public RunLoop(
             ModelClient model,
@@ -187,7 +194,8 @@ public final class RunLoop {
             StreamSink streamSink,
             ToolRegistry toolRegistry,
             ApprovalPolicy approvalPolicy,
-            ApprovalGate approvalGate) {
+            ApprovalGate approvalGate,
+            ApprovalGrantStore approvalGrants) {
         this.model = model;
         this.store = store;
         this.maxSteps = maxSteps;
@@ -195,6 +203,7 @@ public final class RunLoop {
         this.toolRegistry = toolRegistry;
         this.approvalPolicy = approvalPolicy;
         this.approvalGate = approvalGate;
+        this.approvalGrants = approvalGrants;
     }
 
     /**
@@ -222,7 +231,12 @@ public final class RunLoop {
         sink.emit(new SessionEvent.MessageAdded(SessionEvent.Role.USER, input));
         StrategyHandler<RunRequest, RunContext, StepResult> root =
                 RunChainFactory.assemble(
-                        store, model, toolRegistry, approvalPolicy, approvalGate);
+                        store,
+                        model,
+                        toolRegistry,
+                        approvalPolicy,
+                        approvalGate,
+                        approvalGrants);
         Phase.Running phase = Phase.idle().start();
         boolean aborted = false;
 

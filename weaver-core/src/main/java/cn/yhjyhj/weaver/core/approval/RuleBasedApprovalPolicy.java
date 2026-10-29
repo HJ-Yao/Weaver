@@ -47,15 +47,20 @@ public final class RuleBasedApprovalPolicy implements ApprovalPolicy {
      *
      * @param call 待审批的工具调用
      * @param reversibility 工具声明的回滚性
-     * @return 最终审批决策
+     * @param context 会话交互能力与授权记录
+     * @return 最终结论及可审计原因
      */
     @Override
-    public ApprovalDecision decide(StreamChunk.ToolCall call, Reversibility reversibility) {
+    public ApprovalResult decide(
+            StreamChunk.ToolCall call,
+            Reversibility reversibility,
+            ApprovalContext context) {
         Objects.requireNonNull(call, "call");
         Objects.requireNonNull(reversibility, "reversibility");
+        Objects.requireNonNull(context, "context");
 
         if (HARD_DENY_POLICY.isDenied(call)) {
-            return ApprovalDecision.DENY;
+            return new ApprovalResult(ApprovalDecision.DENY, "hard-deny");
         }
 
         String operation = ApprovalRules.operationOf(call.argumentsJson());
@@ -65,16 +70,33 @@ public final class RuleBasedApprovalPolicy implements ApprovalPolicy {
                 .map(ApprovalRule::decision)
                 .orElseGet(() -> fallbackDecision(reversibility));
 
-        // PLAN 的模式约束覆盖基础裁决，确保非只读调用不能借 ALLOW 规则绕过。
+        // 模式修正在授权与无人值守处理前完成，确保会话授权不能绕过 PLAN 约束。
         if (mode == PermissionMode.PLAN && reversibility != Reversibility.REVERSIBLE) {
-            return ApprovalDecision.DENY;
+            return new ApprovalResult(ApprovalDecision.DENY, "policy");
         }
         if (mode == PermissionMode.ACCEPT_EDITS
                 && base == ApprovalDecision.ASK
                 && reversibility == Reversibility.RECOVERABLE) {
-            return ApprovalDecision.ALLOW;
+            base = ApprovalDecision.ALLOW;
         }
-        return base;
+
+        // 已授权操作先于无人值守降级，使同一会话中明确批准过的操作仍可继续。
+        String grantOperation = operation == null ? "*" : operation;
+        if (base == ApprovalDecision.ASK
+                && context.grants().isGranted(
+                        context.sessionId(), call.toolName(), grantOperation)) {
+            return new ApprovalResult(
+                    ApprovalDecision.ALLOW, "session-granted");
+        }
+        if (base == ApprovalDecision.ASK && !context.interactive()) {
+            return new ApprovalResult(ApprovalDecision.DENY, "unattended");
+        }
+
+        return switch (base) {
+            case ALLOW -> new ApprovalResult(ApprovalDecision.ALLOW, "allowed");
+            case ASK -> new ApprovalResult(ApprovalDecision.ASK, "needs-user");
+            case DENY -> new ApprovalResult(ApprovalDecision.DENY, "policy");
+        };
     }
 
     private Optional<ApprovalRule> firstRule(

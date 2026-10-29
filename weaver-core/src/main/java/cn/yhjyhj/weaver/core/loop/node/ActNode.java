@@ -1,8 +1,12 @@
 package cn.yhjyhj.weaver.core.loop.node;
 
 import cn.yhjyhj.weaver.core.approval.ApprovalDecision;
+import cn.yhjyhj.weaver.core.approval.ApprovalContext;
 import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
+import cn.yhjyhj.weaver.core.approval.ApprovalResult;
+import cn.yhjyhj.weaver.core.approval.ApprovalRules;
 import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.ToolResult;
@@ -29,6 +33,7 @@ public final class ActNode extends AbstractRunNode {
 
     private final ApprovalPolicy approvalPolicy; // 计算每次调用的审批结论
     private final ApprovalGate approvalGate; // 在 ASK 时阻塞等待用户答复
+    private final ApprovalGrantStore grants; // 当前进程共享的会话授权记录
 
     private final ToolRegistry registry; // 按模型工具名查找执行实例
 
@@ -45,7 +50,8 @@ public final class ActNode extends AbstractRunNode {
                 registry,
                 observeNode,
                 RuleBasedApprovalPolicy.defaults(),
-                ApprovalGate.denyAll());
+                ApprovalGate.denyAll(),
+                ApprovalGrantStore.none());
     }
 
     /**
@@ -55,16 +61,19 @@ public final class ActNode extends AbstractRunNode {
      * @param observeNode 工具执行完成后进入的结果收敛节点
      * @param approvalPolicy 工具调用审批策略
      * @param approvalGate ASK 时等待用户答复的闸门
+     * @param grants 本会话授权记录
      */
     public ActNode(
             ToolRegistry registry,
             StrategyHandler<RunRequest, RunContext, StepResult> observeNode,
             ApprovalPolicy approvalPolicy,
-            ApprovalGate approvalGate) {
+            ApprovalGate approvalGate,
+            ApprovalGrantStore grants) {
         super(observeNode);
         this.registry = Objects.requireNonNull(registry, "registry");
         this.approvalPolicy = Objects.requireNonNull(approvalPolicy, "approvalPolicy");
         this.approvalGate = Objects.requireNonNull(approvalGate, "approvalGate");
+        this.grants = Objects.requireNonNull(grants, "grants");
     }
 
     /**
@@ -72,8 +81,8 @@ public final class ActNode extends AbstractRunNode {
      *
      * <p>输入是 {@link RunContext#getPendingToolCalls()}，每个调用的工具名和原始参数会通过
      * 注册表、审批策略和审批门完成风险判断。对每次调用都会 emit 一条
-     * {@link SessionEvent.ToolCallStarted}；未直接允许的调用还会 emit 审批请求与结果，
-     * 被拒绝或未知的工具生成错误结果而不执行。
+ * {@link SessionEvent.ToolCallStarted}；审批策略的每个结论都会 emit 审批结果，ASK 与 DENY
+ * 在此之前还会 emit 请求，被拒绝或未知的工具生成错误结果而不执行。
      *
      * <p>产出是按模型给出顺序排列的 {@link SessionEvent.ToolCallCompleted} 事件。获得批准且
      * 已注册的调用在全部可并行时用虚拟线程并发执行，否则串行执行；并发完成顺序不会改变事件
@@ -99,11 +108,21 @@ public final class ActNode extends AbstractRunNode {
             StreamChunk.ToolCall call = calls.get(index);
             Reversibility reversibility =
                     reversibilityOf(tools.get(index), call.argumentsJson());
-            ApprovalDecision decision = approvalPolicy.decide(call, reversibility);
-            approved[index] = approve(call, reversibility, decision, context);
+            ApprovalResult result = approvalPolicy.decide(
+                    call,
+                    reversibility,
+                    new ApprovalContext(
+                            context.getSessionId(),
+                            approvalGate.isInteractive(),
+                            grants));
+            String denialReason = approve(
+                    call, reversibility, result, context);
+            approved[index] = denialReason == null;
             if (!approved[index]) {
-                String deniedBy = decision == ApprovalDecision.DENY ? "policy" : "user";
-                results.set(index, new ToolResult("denied by " + deniedBy, true, 0L));
+                results.set(
+                        index,
+                        new ToolResult(
+                                "denied by " + denialReason, true, 0L));
             }
             context.getSink().emit(new SessionEvent.ToolCallStarted(
                     call.callId(), call.toolName(), call.argumentsJson()));
@@ -132,27 +151,43 @@ public final class ActNode extends AbstractRunNode {
         return null;
     }
 
-    private boolean approve(
+    /**
+     * 记录审批事实并返回拒绝原因。
+     *
+     * @return 放行时为 null；拒绝时为写入工具结果与审计事件的稳定原因
+     */
+    private String approve(
             StreamChunk.ToolCall call,
             Reversibility reversibility,
-            ApprovalDecision decision,
+            ApprovalResult result,
             RunContext context) {
-        if (decision == ApprovalDecision.ALLOW) {
-            return true;
+        if (result.decision() == ApprovalDecision.ALLOW) {
+            context.getSink().emit(
+                    new SessionEvent.ApprovalResolved(
+                            call.callId(), true, result.reason()));
+            return null;
         }
 
         context.getSink().emit(new SessionEvent.ApprovalRequested(
                 call.callId(), call.toolName(), reversibility));
-        if (decision == ApprovalDecision.DENY) {
-            context.getSink().emit(
-                    new SessionEvent.ApprovalResolved(call.callId(), false, "policy"));
-            return false;
+        if (result.decision() == ApprovalDecision.DENY) {
+            context.getSink().emit(new SessionEvent.ApprovalResolved(
+                    call.callId(), false, result.reason()));
+            return result.reason();
         }
 
+        // ASK 的最终事实来自用户答复，而不是策略阶段给出的 needs-user。
         boolean approved = approvalGate.requestApproval(call, reversibility);
+        if (approved) {
+            String operation = ApprovalRules.operationOf(call.argumentsJson());
+            grants.grant(
+                    context.getSessionId(),
+                    call.toolName(),
+                    operation == null ? "*" : operation);
+        }
         context.getSink().emit(new SessionEvent.ApprovalResolved(
                 call.callId(), approved, approved ? "user" : "user-denied"));
-        return approved;
+        return approved ? null : "user-denied";
     }
 
     private static Reversibility reversibilityOf(Tool tool, String argumentsJson) {

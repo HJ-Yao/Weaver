@@ -1,6 +1,7 @@
 package cn.yhjyhj.weaver.server.service;
 
 import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.loop.RunLoop;
@@ -28,6 +29,7 @@ public class RunService {
     private final ToolRegistry tools; // 进程级工具注册表
     private final ApprovalPolicy approvalPolicy; // 工具审批策略
     private final ApprovalGate approvalGate; // 工具审批闸门
+    private final ApprovalGrantStore approvalGrants; // 会话审批授权记录
     private final int maxSteps; // 单轮运行的最大步数
     private final Supplier<SseEmitter> emitterFactory; // 单次请求的响应发射器工厂
 
@@ -40,6 +42,7 @@ public class RunService {
      * @param tools 工具注册表
      * @param approvalPolicy 工具审批策略
      * @param approvalGate 工具审批闸门
+     * @param approvalGrants 会话审批授权记录
      * @param properties Weaver 运行配置
      */
     @Autowired
@@ -50,6 +53,7 @@ public class RunService {
             ToolRegistry tools,
             ApprovalPolicy approvalPolicy,
             ApprovalGate approvalGate,
+            ApprovalGrantStore approvalGrants,
             WeaverProperties properties) {
         this(
                 sessions,
@@ -58,6 +62,7 @@ public class RunService {
                 tools,
                 approvalPolicy,
                 approvalGate,
+                approvalGrants,
                 properties.maxSteps(),
                 () -> new SseEmitter(0L));
     }
@@ -69,6 +74,7 @@ public class RunService {
             ToolRegistry tools,
             ApprovalPolicy approvalPolicy,
             ApprovalGate approvalGate,
+            ApprovalGrantStore approvalGrants,
             WeaverProperties properties,
             Supplier<SseEmitter> emitterFactory) {
         this(
@@ -78,6 +84,7 @@ public class RunService {
                 tools,
                 approvalPolicy,
                 approvalGate,
+                approvalGrants,
                 properties.maxSteps(),
                 emitterFactory);
     }
@@ -89,6 +96,7 @@ public class RunService {
             ToolRegistry tools,
             ApprovalPolicy approvalPolicy,
             ApprovalGate approvalGate,
+            ApprovalGrantStore approvalGrants,
             int maxSteps,
             Supplier<SseEmitter> emitterFactory) {
         this.sessions = Objects.requireNonNull(sessions, "sessions");
@@ -97,6 +105,7 @@ public class RunService {
         this.tools = Objects.requireNonNull(tools, "tools");
         this.approvalPolicy = Objects.requireNonNull(approvalPolicy, "approvalPolicy");
         this.approvalGate = Objects.requireNonNull(approvalGate, "approvalGate");
+        this.approvalGrants = Objects.requireNonNull(approvalGrants, "approvalGrants");
         if (maxSteps <= 0) {
             throw new IllegalArgumentException("maxSteps must be positive");
         }
@@ -143,7 +152,8 @@ public class RunService {
                             streamSink,
                             tools,
                             approvalPolicy,
-                            approvalGate)
+                            approvalGate,
+                            approvalGrants)
                     .run(sessionId, content);
             emitter.complete();
         } catch (Exception exception) {

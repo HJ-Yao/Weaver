@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cn.yhjyhj.weaver.core.approval.ApprovalDecision;
 import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
+import cn.yhjyhj.weaver.core.approval.ApprovalResult;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.ToolResult;
 import cn.yhjyhj.weaver.core.loop.context.RunContext;
@@ -30,7 +32,8 @@ import org.junit.jupiter.api.Test;
 class ActNodeTest {
 
     private static final ApprovalPolicy ALLOW_ALL =
-            (call, reversibility) -> ApprovalDecision.ALLOW; // 旧执行测试显式绕过审批
+            (call, reversibility, context) ->
+                    new ApprovalResult(ApprovalDecision.ALLOW, "allowed"); // 执行测试显式放行
 
     @Test
     void reportsUnknownToolAsErrorAndStillPairsEvents() throws Exception {
@@ -38,12 +41,15 @@ class ActNodeTest {
                 ToolRegistry.empty(),
                 new StreamChunk.ToolCall("call-1", "missing", "{}"));
 
-        assertEquals(2, emitted.size());
+        assertEquals(3, emitted.size());
+        assertEquals(
+                new SessionEvent.ApprovalResolved("call-1", true, "allowed"),
+                emitted.get(0));
         assertEquals(
                 new SessionEvent.ToolCallStarted("call-1", "missing", "{}"),
-                emitted.get(0));
+                emitted.get(1));
         SessionEvent.ToolCallCompleted completed =
-                assertInstanceOf(SessionEvent.ToolCallCompleted.class, emitted.get(1));
+                assertInstanceOf(SessionEvent.ToolCallCompleted.class, emitted.get(2));
         assertEquals("call-1", completed.callId());
         assertEquals(new ToolResult("unknown tool: missing", true, 0L), completed.result());
     }
@@ -59,7 +65,8 @@ class ActNodeTest {
 
         List<SessionEvent> emitted = execute(
                 new ToolRegistry(List.of(dangerous)),
-                (call, reversibility) -> ApprovalDecision.DENY,
+                (call, reversibility, context) -> new ApprovalResult(
+                        ApprovalDecision.DENY, "policy"),
                 (call, reversibility) -> {
                     gateCalls.incrementAndGet();
                     return true;
@@ -91,7 +98,8 @@ class ActNodeTest {
 
         List<SessionEvent> emitted = execute(
                 new ToolRegistry(List.of(edit)),
-                (call, reversibility) -> ApprovalDecision.ASK,
+                (call, reversibility, context) -> new ApprovalResult(
+                        ApprovalDecision.ASK, "needs-user"),
                 (call, reversibility) -> {
                     approvedReversibility.set(reversibility);
                     return true;
@@ -121,7 +129,8 @@ class ActNodeTest {
 
         List<SessionEvent> emitted = execute(
                 new ToolRegistry(List.of(edit)),
-                (call, reversibility) -> ApprovalDecision.ASK,
+                (call, reversibility, context) -> new ApprovalResult(
+                        ApprovalDecision.ASK, "needs-user"),
                 (call, reversibility) -> false,
                 new StreamChunk.ToolCall("call-1", "edit", "{}"));
 
@@ -133,7 +142,8 @@ class ActNodeTest {
                         new SessionEvent.ApprovalResolved("call-1", false, "user-denied"),
                         new SessionEvent.ToolCallStarted("call-1", "edit", "{}"),
                         new SessionEvent.ToolCallCompleted(
-                                "call-1", new ToolResult("denied by user", true, 0L))),
+                                "call-1",
+                                new ToolResult("denied by user-denied", true, 0L))),
                 emitted);
     }
 
@@ -143,9 +153,9 @@ class ActNodeTest {
 
         List<SessionEvent> emitted = execute(
                 ToolRegistry.empty(),
-                (call, reversibility) -> {
+                (call, reversibility, context) -> {
                     requestedReversibility.set(reversibility);
-                    return ApprovalDecision.ASK;
+                    return new ApprovalResult(ApprovalDecision.ASK, "needs-user");
                 },
                 (call, reversibility) -> true,
                 new StreamChunk.ToolCall("call-1", "missing", "{}"));
@@ -206,9 +216,9 @@ class ActNodeTest {
 
         List<SessionEvent> emitted = execute(
                 new ToolRegistry(List.of(left, right, denied)),
-                (call, reversibility) -> call.toolName().equals("denied")
-                        ? ApprovalDecision.DENY
-                        : ApprovalDecision.ALLOW,
+                (call, reversibility, context) -> call.toolName().equals("denied")
+                        ? new ApprovalResult(ApprovalDecision.DENY, "policy")
+                        : new ApprovalResult(ApprovalDecision.ALLOW, "allowed"),
                 ApprovalGate.denyAll(),
                 new StreamChunk.ToolCall("call-1", "left", "{}"),
                 new StreamChunk.ToolCall("call-2", "denied", "{}"),
@@ -268,7 +278,8 @@ class ActNodeTest {
 
         execute(
                 new ToolRegistry(List.of(file)),
-                (call, reversibility) -> ApprovalDecision.ASK,
+                (call, reversibility, context) -> new ApprovalResult(
+                        ApprovalDecision.ASK, "needs-user"),
                 (call, reversibility) -> {
                     approvedReversibility.set(reversibility);
                     return true;
@@ -329,15 +340,21 @@ class ActNodeTest {
                 new StreamChunk.ToolCall("call-1", "first", "{\"n\":1}"),
                 new StreamChunk.ToolCall("call-2", "second", "{\"n\":2}"));
 
-        assertEquals(4, emitted.size());
+        assertEquals(6, emitted.size());
         assertEquals(
-                new SessionEvent.ToolCallStarted("call-1", "first", "{\"n\":1}"),
+                new SessionEvent.ApprovalResolved("call-1", true, "allowed"),
                 emitted.get(0));
         assertEquals(
-                new SessionEvent.ToolCallStarted("call-2", "second", "{\"n\":2}"),
+                new SessionEvent.ToolCallStarted("call-1", "first", "{\"n\":1}"),
                 emitted.get(1));
-        assertInstanceOf(SessionEvent.ToolCallCompleted.class, emitted.get(2));
-        assertInstanceOf(SessionEvent.ToolCallCompleted.class, emitted.get(3));
+        assertEquals(
+                new SessionEvent.ApprovalResolved("call-2", true, "allowed"),
+                emitted.get(2));
+        assertEquals(
+                new SessionEvent.ToolCallStarted("call-2", "second", "{\"n\":2}"),
+                emitted.get(3));
+        assertInstanceOf(SessionEvent.ToolCallCompleted.class, emitted.get(4));
+        assertInstanceOf(SessionEvent.ToolCallCompleted.class, emitted.get(5));
     }
 
     @Test
@@ -383,7 +400,8 @@ class ActNodeTest {
                 new ToolRegistry(List.of(timed)),
                 (request, ignored) -> null,
                 ALLOW_ALL,
-                ApprovalGate.denyAll());
+                ApprovalGate.denyAll(),
+                ApprovalGrantStore.none());
 
         assertNull(node.apply(new RunRequest("session", "input", 0), context));
 
@@ -434,9 +452,9 @@ class ActNodeTest {
 
         execute(
                 new ToolRegistry(List.of(ambiguous)),
-                (call, reversibility) -> {
+                (call, reversibility, context) -> {
                     requestedReversibility.set(reversibility);
-                    return ApprovalDecision.ALLOW;
+                    return new ApprovalResult(ApprovalDecision.ALLOW, "allowed");
                 },
                 ApprovalGate.denyAll(),
                 new StreamChunk.ToolCall("call-1", "ambiguous", "{}"));
@@ -457,7 +475,12 @@ class ActNodeTest {
         List<SessionEvent> emitted = new ArrayList<>();
         RunContext context = new RunContext("session", emitted::add);
         context.setPendingToolCalls(List.of(calls));
-        ActNode node = new ActNode(registry, (request, ignored) -> null, policy, gate);
+        ActNode node = new ActNode(
+                registry,
+                (request, ignored) -> null,
+                policy,
+                gate,
+                ApprovalGrantStore.none());
 
         assertNull(node.apply(new RunRequest("session", "input", 0), context));
         assertTrue(context.getPendingToolCalls().isEmpty());

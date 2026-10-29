@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.loop.RunLoop;
@@ -57,6 +58,7 @@ class WeaverApplicationTest {
                 java.util.List.of("file", "git", "shell"),
                 tools.specs().stream().map(spec -> spec.name()).toList());
         assertTrue(context.getBean(ApprovalPolicy.class) != null);
+        assertTrue(context.getBean(ApprovalGrantStore.class) != null);
         assertTrue(context.getBean(ApprovalGate.class) != null);
         assertTrue(context.getBean(ModelClient.class) instanceof EchoModelClient);
         assertTrue(context.getBean(SessionService.class) != null);

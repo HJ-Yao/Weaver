@@ -1,7 +1,9 @@
 package cn.yhjyhj.weaver.server.config;
 
 import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
+import cn.yhjyhj.weaver.core.approval.InMemoryApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
@@ -53,6 +55,16 @@ public class WeaverConfig {
     @Bean
     public ApprovalPolicy approvalPolicy() {
         return RuleBasedApprovalPolicy.defaults();
+    }
+
+    /**
+     * 创建进程内会话授权记录。
+     *
+     * @return 线程安全的内存授权存储
+     */
+    @Bean
+    public ApprovalGrantStore approvalGrantStore() {
+        return new InMemoryApprovalGrantStore();
     }
 
     /**

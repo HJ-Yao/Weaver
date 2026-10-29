@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /** 从工具参数 JSON 中提取审批规则需要的结构化字段。 */
-final class ApprovalRules {
+public final class ApprovalRules {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper(); // 仅用于读取审批匹配字段
 
@@ -17,7 +17,7 @@ final class ApprovalRules {
      * @param argumentsJson 模型给出的原始参数 JSON
      * @return 操作名；参数缺失、非对象、解析失败或 {@code op} 非文本时为 null
      */
-    static String operationOf(String argumentsJson) {
+    public static String operationOf(String argumentsJson) {
         return textArgument(argumentsJson, "op");
     }
 

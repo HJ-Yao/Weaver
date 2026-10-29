@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cn.yhjyhj.weaver.core.approval.ApprovalDecision;
 import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
+import cn.yhjyhj.weaver.core.approval.ApprovalResult;
 import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.loop.context.RunContext;
@@ -52,14 +54,16 @@ class RunChainFactoryTest {
                 new StreamChunk.Text("answer"),
                 new StreamChunk.Done(StreamChunk.StopReason.STOP))));
         RunContext context = new RunContext("session", event -> store.append("session", event));
-        ApprovalPolicy policy = (call, reversibility) -> ApprovalDecision.ALLOW;
+        ApprovalPolicy policy = (call, reversibility, approvalContext) ->
+                new ApprovalResult(ApprovalDecision.ALLOW, "allowed");
 
         var chain = RunChainFactory.assemble(
                 store,
                 model,
                 ToolRegistry.empty(),
                 policy,
-                ApprovalGate.denyAll());
+                ApprovalGate.denyAll(),
+                ApprovalGrantStore.none());
         StepResult result = chain.apply(new RunRequest("session", "你好", 0), context);
 
         assertTrue(result.finished());

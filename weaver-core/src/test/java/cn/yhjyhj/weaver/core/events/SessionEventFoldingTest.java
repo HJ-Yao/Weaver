@@ -152,6 +152,37 @@ class SessionEventFoldingTest {
     }
 
     @Test
+    void replayPairsApprovalResolutionWithRequest() {
+        var events = List.of(
+                new StoredEvent(1L, new SessionEvent.ApprovalRequested(
+                        "call-ask", "git", Reversibility.IRREVERSIBLE)),
+                new StoredEvent(2L, new SessionEvent.ApprovalResolved(
+                        "call-ask", true, "user")),
+                new StoredEvent(3L, new SessionEvent.ApprovalResolved(
+                        "call-allow", true, "allowed")),
+                new StoredEvent(4L, new SessionEvent.ApprovalRequested(
+                        "call-deny", "file", Reversibility.RECOVERABLE)),
+                new StoredEvent(5L, new SessionEvent.ApprovalResolved(
+                        "call-deny", false, "hard-deny")));
+
+        var snapshot = SessionEvents.replay(events);
+
+        assertEquals(List.of(
+                new SessionSnapshot.ApprovalRecord(
+                        "call-ask", "git", true, "user"),
+                new SessionSnapshot.ApprovalRecord(
+                        "call-allow", "unknown", true, "allowed"),
+                new SessionSnapshot.ApprovalRecord(
+                        "call-deny", "file", false, "hard-deny")),
+                snapshot.approvals());
+    }
+
+    @Test
+    void emptySnapshotHasNoApprovalRecords() {
+        assertTrue(SessionSnapshot.empty().approvals().isEmpty());
+    }
+
+    @Test
     void replayIsIdempotentForSameEventStream() {
         var events = List.of(
                 new StoredEvent(1L, new SessionEvent.MessageAdded(SessionEvent.Role.USER, "hi")),

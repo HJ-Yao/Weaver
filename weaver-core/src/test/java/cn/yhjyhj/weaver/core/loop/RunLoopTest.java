@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cn.yhjyhj.weaver.core.approval.ApprovalDecision;
 import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
+import cn.yhjyhj.weaver.core.approval.ApprovalResult;
 import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.SessionSnapshot;
@@ -31,7 +33,8 @@ class RunLoopTest {
 
     private static final String SESSION_ID = "session";
     private static final ApprovalPolicy ALLOW_ALL =
-            (call, reversibility) -> ApprovalDecision.ALLOW; // 执行型测试显式绕过审批
+            (call, reversibility, context) ->
+                    new ApprovalResult(ApprovalDecision.ALLOW, "allowed"); // 执行型测试显式放行
 
     @Test
     void recordsUserAndAssistantMessagesThenFinishesNaturally() {
@@ -88,7 +91,8 @@ class RunLoopTest {
                         store,
                         fileRegistry(),
                         ALLOW_ALL,
-                        ApprovalGate.denyAll())
+                        ApprovalGate.denyAll(),
+                        ApprovalGrantStore.none())
                 .run(SESSION_ID, "读取 x");
 
         assertTrue(events(store).contains(
@@ -126,7 +130,8 @@ class RunLoopTest {
                         store,
                         fileRegistry(),
                         ALLOW_ALL,
-                        ApprovalGate.denyAll())
+                        ApprovalGate.denyAll(),
+                        ApprovalGrantStore.none())
                 .run(SESSION_ID, "读取 x");
 
         assertEquals(List.of(
@@ -152,9 +157,11 @@ class RunLoopTest {
                 .map(SessionEvent.ToolCallCompleted.class::cast)
                 .findFirst()
                 .orElseThrow();
-        assertEquals(new ToolResult("denied by user", true, 0L), completed.result());
+        assertEquals(
+                new ToolResult("denied by unattended", true, 0L),
+                completed.result());
         assertTrue(events(store).contains(
-                new SessionEvent.ApprovalResolved("call-1", false, "user-denied")));
+                new SessionEvent.ApprovalResolved("call-1", false, "unattended")));
     }
 
     @Test

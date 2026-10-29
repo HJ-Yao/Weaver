@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
@@ -49,6 +50,7 @@ class RunServiceTest {
                 ToolRegistry.empty(),
                 RuleBasedApprovalPolicy.defaults(),
                 ApprovalGate.denyAll(),
+                ApprovalGrantStore.none(),
                 new WeaverProperties(Path.of("."), 10),
                 () -> emitter);
 
@@ -81,6 +83,7 @@ class RunServiceTest {
                 ToolRegistry.empty(),
                 RuleBasedApprovalPolicy.defaults(),
                 ApprovalGate.denyAll(),
+                ApprovalGrantStore.none(),
                 new WeaverProperties(Path.of("."), 10));
 
         ResponseStatusException thrown = assertThrows(

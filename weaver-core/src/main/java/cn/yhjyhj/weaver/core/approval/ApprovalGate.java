@@ -8,6 +8,15 @@ import cn.yhjyhj.weaver.core.tool.Reversibility;
 public interface ApprovalGate {
 
     /**
+     * 是否存在可询问用户的界面。
+     *
+     * @return 默认存在交互界面
+     */
+    default boolean isInteractive() {
+        return true;
+    }
+
+    /**
      * 请求用户批准一次工具调用。
      *
      * @param call 待批准的工具调用
@@ -16,8 +25,23 @@ public interface ApprovalGate {
      */
     boolean requestApproval(StreamChunk.ToolCall call, Reversibility reversibility);
 
-    /** 无 UI 时的安全默认：一律拒绝。 */
+    /**
+     * 创建无人值守的安全闸门。
+     *
+     * @return 显式声明无 UI 且一律拒绝的闸门
+     */
     static ApprovalGate denyAll() {
-        return (call, reversibility) -> false;
+        return new ApprovalGate() {
+            @Override
+            public boolean isInteractive() {
+                return false;
+            }
+
+            @Override
+            public boolean requestApproval(
+                    StreamChunk.ToolCall call, Reversibility reversibility) {
+                return false;
+            }
+        };
     }
 }

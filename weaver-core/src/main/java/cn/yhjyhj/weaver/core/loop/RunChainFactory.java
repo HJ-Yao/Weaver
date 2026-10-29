@@ -1,6 +1,7 @@
 package cn.yhjyhj.weaver.core.loop;
 
 import cn.yhjyhj.weaver.core.approval.ApprovalGate;
+import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
@@ -50,7 +51,8 @@ public final class RunChainFactory {
                 model,
                 registry,
                 RuleBasedApprovalPolicy.defaults(),
-                ApprovalGate.denyAll());
+                ApprovalGate.denyAll(),
+                ApprovalGrantStore.none());
     }
 
     /**
@@ -61,6 +63,7 @@ public final class RunChainFactory {
      * @param registry 工具注册表
      * @param approvalPolicy 工具调用审批策略
      * @param approvalGate ASK 时等待用户答复的闸门
+     * @param grants 会话授权记录
      * @return 策略链入口
      */
     public static StrategyHandler<RunRequest, RunContext, StepResult> assemble(
@@ -68,9 +71,11 @@ public final class RunChainFactory {
             ModelClient model,
             ToolRegistry registry,
             ApprovalPolicy approvalPolicy,
-            ApprovalGate approvalGate) {
+            ApprovalGate approvalGate,
+            ApprovalGrantStore grants) {
         ObserveNode observe = new ObserveNode();
-        ActNode act = new ActNode(registry, observe, approvalPolicy, approvalGate);
+        ActNode act = new ActNode(
+                registry, observe, approvalPolicy, approvalGate, grants);
         ReasonNode reason = new ReasonNode(model, registry, act, observe);
         IntentNode intent = new IntentNode(reason);
         return new ContextNode(store, intent, reason);

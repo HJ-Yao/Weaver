@@ -17,7 +17,8 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.ALLOW,
-                policy.decide(
+                decision(
+                        policy,
                         call("git", """
                                 {"op":"status"}
                                 """),
@@ -30,14 +31,16 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.ASK,
-                policy.decide(
+                decision(
+                        policy,
                         call("git", """
                                 {"op":"commit","message":"change"}
                                 """),
                         Reversibility.IRREVERSIBLE));
         assertEquals(
                 ApprovalDecision.ASK,
-                policy.decide(
+                decision(
+                        policy,
                         call("git", """
                                 {"op":"push"}
                                 """),
@@ -50,7 +53,8 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.ASK,
-                policy.decide(
+                decision(
+                        policy,
                         call("shell", """
                                 {"cmd":"echo hi"}
                                 """),
@@ -63,14 +67,16 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.ASK,
-                policy.decide(
+                decision(
+                        policy,
                         call("file", """
                                 {"op":"write","path":"src/Main.java","content":"class Main {}"}
                                 """),
                         Reversibility.RECOVERABLE));
         assertEquals(
                 ApprovalDecision.ALLOW,
-                policy.decide(
+                decision(
+                        policy,
                         call("file", """
                                 {"op":"read","path":"src/Main.java"}
                                 """),
@@ -83,14 +89,16 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.DENY,
-                policy.decide(
+                decision(
+                        policy,
                         call("file", """
                                 {"op":"write","path":".git/config","content":"x"}
                                 """),
                         Reversibility.RECOVERABLE));
         assertEquals(
                 ApprovalDecision.DENY,
-                policy.decide(
+                decision(
+                        policy,
                         call("file", """
                                 {"op":"write","path":".weaver/state.db","content":"x"}
                                 """),
@@ -103,7 +111,8 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.ALLOW,
-                policy.decide(
+                decision(
+                        policy,
                         call("file", """
                                 {"op":"read","path":".git/config"}
                                 """),
@@ -116,14 +125,16 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.DENY,
-                policy.decide(
+                decision(
+                        policy,
                         call("shell", """
                                 {"cmd":"rm -rf .git"}
                                 """),
                         Reversibility.IRREVERSIBLE));
         assertEquals(
                 ApprovalDecision.DENY,
-                policy.decide(
+                decision(
+                        policy,
                         call("shell", """
                                 {"cmd":"python -c \\\"shutil.rmtree('.git')\\\""}
                                 """),
@@ -140,7 +151,8 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.DENY,
-                policy.decide(
+                decision(
+                        policy,
                         call("file", """
                                 {"op":"write","path":"src/Main.java"}
                                 """),
@@ -157,7 +169,8 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.ASK,
-                policy.decide(
+                decision(
+                        policy,
                         call("file", """
                                 {"op":"write","path":"src/Main.java"}
                                 """),
@@ -172,7 +185,8 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.DENY,
-                policy.decide(
+                decision(
+                        policy,
                         call("file", """
                                 {"op":"write","path":".weaver/state.db"}
                                 """),
@@ -187,7 +201,8 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.DENY,
-                policy.decide(
+                decision(
+                        policy,
                         call("git", """
                                 {"op":"commit","message":"change"}
                                 """),
@@ -202,7 +217,8 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.ALLOW,
-                policy.decide(
+                decision(
+                        policy,
                         call("file", """
                                 {"op":"write","path":"src/Main.java"}
                                 """),
@@ -219,7 +235,8 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.DENY,
-                policy.decide(
+                decision(
+                        policy,
                         call("file", """
                                 {"op":"write","path":"src/Main.java"}
                                 """),
@@ -233,13 +250,22 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.ALLOW,
-                policy.decide(call("custom", "{}"), Reversibility.REVERSIBLE));
+                decision(
+                        policy,
+                        call("custom", "{}"),
+                        Reversibility.REVERSIBLE));
         assertEquals(
                 ApprovalDecision.ASK,
-                policy.decide(call("custom", "{}"), Reversibility.RECOVERABLE));
+                decision(
+                        policy,
+                        call("custom", "{}"),
+                        Reversibility.RECOVERABLE));
         assertEquals(
                 ApprovalDecision.ASK,
-                policy.decide(call("custom", "{}"), Reversibility.IRREVERSIBLE));
+                decision(
+                        policy,
+                        call("custom", "{}"),
+                        Reversibility.IRREVERSIBLE));
     }
 
     @Test
@@ -248,7 +274,10 @@ class RuleBasedApprovalPolicyTest {
 
         assertEquals(
                 ApprovalDecision.ASK,
-                policy.decide(call("shell", "{"), Reversibility.IRREVERSIBLE));
+                decision(
+                        policy,
+                        call("shell", "{"),
+                        Reversibility.IRREVERSIBLE));
     }
 
     @ParameterizedTest(name = "{0}: {1} + {2} -> {3}")
@@ -275,10 +304,25 @@ class RuleBasedApprovalPolicyTest {
         RuleBasedApprovalPolicy policy = new RuleBasedApprovalPolicy(
                 List.of(new ApprovalRule("custom", null, baseDecision)), mode);
 
-        assertEquals(expected, policy.decide(call("custom", "{}"), reversibility));
+        assertEquals(
+                expected,
+                decision(policy, call("custom", "{}"), reversibility));
     }
 
-    private static StreamChunk.ToolCall call(String toolName, String argumentsJson) {
+    private static ApprovalDecision decision(
+            RuleBasedApprovalPolicy policy,
+            StreamChunk.ToolCall call,
+            Reversibility reversibility) {
+        return policy.decide(
+                        call,
+                        reversibility,
+                        ApprovalContext.interactive(
+                                "session-1", ApprovalGrantStore.none()))
+                .decision();
+    }
+
+    private static StreamChunk.ToolCall call(
+            String toolName, String argumentsJson) {
         return new StreamChunk.ToolCall("call-1", toolName, argumentsJson);
     }
 }

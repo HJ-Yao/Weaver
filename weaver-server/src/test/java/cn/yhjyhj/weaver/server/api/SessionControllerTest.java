@@ -80,6 +80,7 @@ class SessionControllerTest {
                 List.of(new SessionSnapshot.Message(
                         cn.yhjyhj.weaver.core.events.SessionEvent.Role.USER, "hello")),
                 List.of(),
+                List.of(),
                 false,
                 1L);
         when(sessionService.find("session-1")).thenReturn(Optional.of(SUMMARY));

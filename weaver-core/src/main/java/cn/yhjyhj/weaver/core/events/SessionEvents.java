@@ -18,7 +18,10 @@ public final class SessionEvents {
     public static SessionSnapshot replay(Iterable<StoredEvent> events) {
         List<SessionSnapshot.Message> messages = new ArrayList<>();
         List<SessionSnapshot.ToolCallRecord> toolCalls = new ArrayList<>();
+        List<SessionSnapshot.ApprovalRecord> approvals = new ArrayList<>();
         Map<String, SessionEvent.ToolCallStarted> pendingToolCalls = new HashMap<>();
+        Map<String, SessionEvent.ApprovalRequested> pendingApprovalRequests =
+                new HashMap<>();
         boolean aborted = false;
         long lastSeq = 0L;
 
@@ -39,10 +42,25 @@ public final class SessionEvents {
                 // 工具结果也是下一轮模型可消费的事实，按完成顺序进入消息历史。
                 messages.add(new SessionSnapshot.Message(
                         SessionEvent.Role.TOOL, c.result().content()));
+            } else if (e instanceof SessionEvent.ApprovalRequested r) {
+                pendingApprovalRequests.put(r.callId(), r);
+            } else if (e instanceof SessionEvent.ApprovalResolved r) {
+                SessionEvent.ApprovalRequested requested =
+                        pendingApprovalRequests.remove(r.callId());
+                approvals.add(new SessionSnapshot.ApprovalRecord(
+                        r.callId(),
+                        requested == null ? "unknown" : requested.toolName(),
+                        r.approved(),
+                        r.reason()));
             } else if (e instanceof SessionEvent.RunFinished f) {
                 aborted = f.aborted();
             }
         }
-        return new SessionSnapshot(List.copyOf(messages), List.copyOf(toolCalls), aborted, lastSeq);
+        return new SessionSnapshot(
+                List.copyOf(messages),
+                List.copyOf(toolCalls),
+                List.copyOf(approvals),
+                aborted,
+                lastSeq);
     }
 }

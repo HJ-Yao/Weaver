@@ -6,6 +6,7 @@ import java.util.List;
 public record SessionSnapshot(
         List<Message> messages,
         List<ToolCallRecord> toolCalls,
+        List<ApprovalRecord> approvals,
         boolean aborted,
         long lastSeq) {
 
@@ -19,8 +20,22 @@ public record SessionSnapshot(
             String argumentsJson,
             ToolResult result) {}
 
+    /**
+     * 一次审批事实。
+     *
+     * @param callId 工具调用标识
+     * @param toolName 工具名称；缺少请求事件时为 {@code "unknown"}
+     * @param approved 是否批准执行
+     * @param reason 审批来源或拒绝原因
+     */
+    public record ApprovalRecord(
+            String callId,
+            String toolName,
+            boolean approved,
+            String reason) {}
+
     /** 空会话的初始快照。 */
     public static SessionSnapshot empty() {
-        return new SessionSnapshot(List.of(), List.of(), false, 0L);
+        return new SessionSnapshot(List.of(), List.of(), List.of(), false, 0L);
     }
 }
