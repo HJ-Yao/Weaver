@@ -99,43 +99,17 @@ public final class OpenAiChatCompletionsModelClient implements ModelClient {
                             terminal));
             worker.set(readingThread);
 
-            output.subscribe(new Flow.Subscriber<>() {
-                @Override
-                public void onSubscribe(Flow.Subscription subscription) {
-                    subscriber.onSubscribe(new Flow.Subscription() {
-                        @Override
-                        public void request(long count) {
-                            subscription.request(count);
+            new ModelOutputBridge<StreamChunk>(
+                    subscriber,
+                    cancelled,
+                    () -> {
+                        Flow.Subscription upstream = transportSubscription.get();
+                        if (upstream != null) {
+                            upstream.cancel();
                         }
-
-                        @Override
-                        public void cancel() {
-                            cancelled.set(true);
-                            subscription.cancel();
-                            Flow.Subscription upstream = transportSubscription.get();
-                            if (upstream != null) {
-                                upstream.cancel();
-                            }
-                            worker.get().interrupt();
-                        }
-                    });
-                }
-
-                @Override
-                public void onNext(StreamChunk item) {
-                    subscriber.onNext(item);
-                }
-
-                @Override
-                public void onError(Throwable throwable) {
-                    subscriber.onError(throwable);
-                }
-
-                @Override
-                public void onComplete() {
-                    subscriber.onComplete();
-                }
-            });
+                        worker.get().interrupt();
+                    })
+                    .subscribeTo(output);
 
             if (!cancelled.get()) {
                 readingThread.start();
@@ -149,57 +123,84 @@ public final class OpenAiChatCompletionsModelClient implements ModelClient {
             AtomicReference<Flow.Subscription> transportSubscription,
             AtomicBoolean cancelled,
             AtomicBoolean terminal) {
-        ParseState state = new ParseState();
-        transport.post(endpoint, requestHeaders(), jsonBody).subscribe(new Flow.Subscriber<>() {
-            @Override
-            public void onSubscribe(Flow.Subscription subscription) {
-                transportSubscription.set(subscription);
-                if (cancelled.get()) {
-                    subscription.cancel();
-                    return;
-                }
-                subscription.request(1);
-            }
+        OpenAiStreamSubscriber bridge = new OpenAiStreamSubscriber(
+                output, transportSubscription, cancelled, terminal);
+        transport.post(endpoint, requestHeaders(), jsonBody).subscribe(bridge);
+    }
 
-            @Override
-            public void onNext(String payload) {
-                if (cancelled.get()) {
-                    return;
-                }
-                try {
-                    boolean done = processPayload(payload, state, output);
-                    if (done) {
-                        terminal.set(true);
-                        transportSubscription.get().cancel();
-                        output.close();
-                        return;
-                    }
-                    transportSubscription.get().request(1);
-                } catch (RuntimeException exception) {
-                    fail(output, terminal, exception);
-                }
-            }
+    /**
+     * 消费 OpenAI SSE 负载，并按协议顺序产出文本、工具调用和结束事件。
+     *
+     * <p>实例由 {@link #readModelStream} 为单次请求创建并交给
+     * {@link HttpSseTransport}，生命周期随传输流终止或下游取消结束。
+     */
+    private final class OpenAiStreamSubscriber implements Flow.Subscriber<String> {
 
-            @Override
-            public void onError(Throwable throwable) {
-                fail(output, terminal, throwable);
-            }
+        private final SubmissionPublisher<StreamChunk> output; // 模型流内部发布者
+        private final AtomicReference<Flow.Subscription> transportSubscription; // 上游传输订阅句柄
+        private final AtomicBoolean cancelled; // 下游是否已取消
+        private final AtomicBoolean terminal; // 是否已发出终止信号
+        private final ParseState state = new ParseState(); // 当前响应聚合状态
 
-            @Override
-            public void onComplete() {
-                if (cancelled.get()) {
-                    return;
-                }
-                terminal.set(true);
-                try {
-                    emitAggregatedToolCalls(state, output);
-                    output.submit(new StreamChunk.Done(state.stopReason));
+        private OpenAiStreamSubscriber(
+                SubmissionPublisher<StreamChunk> output,
+                AtomicReference<Flow.Subscription> transportSubscription,
+                AtomicBoolean cancelled,
+                AtomicBoolean terminal) {
+            this.output = output;
+            this.transportSubscription = transportSubscription;
+            this.cancelled = cancelled;
+            this.terminal = terminal;
+        }
+
+        @Override
+        public void onSubscribe(Flow.Subscription subscription) {
+            transportSubscription.set(subscription);
+            if (cancelled.get()) {
+                subscription.cancel();
+                return;
+            }
+            subscription.request(1);
+        }
+
+        @Override
+        public void onNext(String payload) {
+            if (cancelled.get()) {
+                return;
+            }
+            try {
+                boolean done = processPayload(payload, state, output);
+                if (done) {
+                    terminal.set(true);
+                    transportSubscription.get().cancel();
                     output.close();
-                } catch (RuntimeException exception) {
-                    output.closeExceptionally(exception);
+                    return;
                 }
+                transportSubscription.get().request(1);
+            } catch (RuntimeException exception) {
+                fail(output, terminal, exception);
             }
-        });
+        }
+
+        @Override
+        public void onError(Throwable throwable) {
+            fail(output, terminal, throwable);
+        }
+
+        @Override
+        public void onComplete() {
+            if (cancelled.get()) {
+                return;
+            }
+            terminal.set(true);
+            try {
+                emitAggregatedToolCalls(state, output);
+                output.submit(new StreamChunk.Done(state.stopReason));
+                output.close();
+            } catch (RuntimeException exception) {
+                output.closeExceptionally(exception);
+            }
+        }
     }
 
     private boolean processPayload(
