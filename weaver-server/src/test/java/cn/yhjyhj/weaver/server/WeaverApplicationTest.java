@@ -65,7 +65,8 @@ class WeaverApplicationTest {
                 tools.specs().stream().map(spec -> spec.name()).toList());
         assertTrue(context.getBean(ApprovalPolicy.class) != null);
         assertTrue(context.getBean(ApprovalGrantStore.class) != null);
-        assertTrue(context.getBean(ApprovalGate.class) != null);
+        assertEquals(0, context.getBeanNamesForType(ApprovalGate.class).length);
+        assertEquals(300, properties.approval().timeoutSeconds());
         assertTrue(context.getBean(ModelClient.class) instanceof OpenAiChatCompletionsModelClient);
         assertTrue(context.getBean(SessionService.class) != null);
         assertTrue(context.getBean(RunService.class) != null);

@@ -49,9 +49,12 @@ public final class SseStreamSink implements StreamSink {
         send("error", message);
     }
 
-    private synchronized void send(String eventName, Object data) {
+    private void send(String eventName, Object data) {
         try {
-            sender.send(eventName, data);
+            // 审批与模型输出共享 sender，同一把锁保证单个 SSE 响应串行写入。
+            synchronized (sender) {
+                sender.send(eventName, data);
+            }
         } catch (IOException exception) {
             throw new UncheckedIOException("failed to send SSE event: " + eventName, exception);
         }
@@ -61,12 +64,5 @@ public final class SseStreamSink implements StreamSink {
         SseEmitter requiredEmitter = Objects.requireNonNull(emitter, "emitter");
         return (eventName, data) -> requiredEmitter.send(
                 SseEmitter.event().name(eventName).data(data));
-    }
-
-    /** 可替换的 SSE 发送边界，仅用于隔离事件构造与传输失败。 */
-    @FunctionalInterface
-    interface SseSender {
-
-        void send(String eventName, Object data) throws IOException;
     }
 }

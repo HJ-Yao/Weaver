@@ -1,6 +1,5 @@
 package cn.yhjyhj.weaver.server.config;
 
-import cn.yhjyhj.weaver.core.approval.ApprovalGate;
 import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.approval.InMemoryApprovalGrantStore;
@@ -67,16 +66,6 @@ public class WeaverConfig {
     @Bean
     public ApprovalGrantStore approvalGrantStore() {
         return new InMemoryApprovalGrantStore();
-    }
-
-    /**
-     * 创建无 UI 场景使用的安全审批闸门。
-     *
-     * @return 一律拒绝 ASK 请求的审批闸门
-     */
-    @Bean
-    public ApprovalGate approvalGate() {
-        return ApprovalGate.denyAll();
     }
 
     /**

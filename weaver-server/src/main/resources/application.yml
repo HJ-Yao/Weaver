@@ -5,6 +5,8 @@ weaver:
   workspace: ${user.dir}
   max-steps: 50
   store-path: ${user.home}/.weaver/weaver.db
+  approval:
+    timeout-seconds: ${WEAVER_APPROVAL_TIMEOUT_SECONDS:300}
   model:
     protocol: ${WEAVER_MODEL_PROTOCOL:openai-chat-completions}
     base-url: ${WEAVER_MODEL_BASE_URL:https://api.deepseek.com}

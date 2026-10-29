@@ -17,6 +17,7 @@ import org.springframework.validation.annotation.Validated;
  * @param maxSteps 单轮 Agent 运行允许执行的最大步数
  * @param storePath 会话事件 SQLite 数据库文件路径
  * @param model 模型端点与生成参数
+ * @param approval 交互审批配置
  */
 @Validated
 @ConfigurationProperties(prefix = "weaver")
@@ -24,7 +25,8 @@ public record WeaverProperties(
         @NotNull Path workspace,
         @Min(1) int maxSteps,
         @NotNull Path storePath,
-        @Valid @NotNull ModelProperties model) {
+        @Valid @NotNull ModelProperties model,
+        @Valid @NotNull ApprovalProperties approval) {
 
     /** 固定使用规范构造器进行配置绑定，忽略测试兼容构造器。 */
     @ConstructorBinding
@@ -49,7 +51,21 @@ public record WeaverProperties(
                         "deepseek-chat",
                         4096,
                         0.7,
-                        120));
+                        120),
+                new ApprovalProperties(300));
+    }
+
+    /**
+     * 为只覆盖模型配置的调用方提供兼容构造，审批使用默认超时。
+     *
+     * @param workspace 内置工具允许访问的工作区根目录
+     * @param maxSteps 单轮运行最大步数
+     * @param storePath 会话事件数据库路径
+     * @param model 模型配置
+     */
+    public WeaverProperties(
+            Path workspace, int maxSteps, Path storePath, ModelProperties model) {
+        this(workspace, maxSteps, storePath, model, new ApprovalProperties(300));
     }
 
     /**
@@ -71,4 +87,11 @@ public record WeaverProperties(
             @Min(1) int maxTokens,
             double temperature,
             @Min(1) int timeoutSeconds) {}
+
+    /**
+     * 交互审批配置。
+     *
+     * @param timeoutSeconds 单次审批等待上限；必须为正数
+     */
+    public record ApprovalProperties(@Min(1) int timeoutSeconds) {}
 }
