@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import cn.yhjyhj.weaver.server.config.WeaverProperties.ModelProperties;
+import cn.yhjyhj.weaver.server.model.AnthropicMessagesModelClient;
 import cn.yhjyhj.weaver.server.model.OpenAiChatCompletionsModelClient;
 import java.net.URI;
 import java.nio.file.Path;
@@ -17,6 +18,15 @@ class WeaverConfigTest {
 
         assertInstanceOf(
                 OpenAiChatCompletionsModelClient.class,
+                new WeaverConfig().modelClient(properties));
+    }
+
+    @Test
+    void createsClientForConfiguredAnthropicMessagesProtocol() {
+        WeaverProperties properties = properties("anthropic-messages");
+
+        assertInstanceOf(
+                AnthropicMessagesModelClient.class,
                 new WeaverConfig().modelClient(properties));
     }
 

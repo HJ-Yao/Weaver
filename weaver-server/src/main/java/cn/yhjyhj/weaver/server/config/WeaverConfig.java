@@ -11,6 +11,7 @@ import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import cn.yhjyhj.weaver.core.tool.builtin.FileTool;
 import cn.yhjyhj.weaver.core.tool.builtin.GitTool;
 import cn.yhjyhj.weaver.core.tool.builtin.ShellTool;
+import cn.yhjyhj.weaver.server.model.AnthropicMessagesModelClient;
 import cn.yhjyhj.weaver.server.model.OpenAiChatCompletionsModelClient;
 import cn.yhjyhj.weaver.server.store.SqliteEventStore;
 import java.nio.file.Path;
@@ -90,6 +91,8 @@ public class WeaverConfig {
         return switch (properties.model().protocol()) {
             case "openai-chat-completions" ->
                     new OpenAiChatCompletionsModelClient(properties.model());
+            case "anthropic-messages" ->
+                    new AnthropicMessagesModelClient(properties.model());
             default -> throw new IllegalArgumentException(
                     "unsupported model protocol: " + properties.model().protocol());
         };
