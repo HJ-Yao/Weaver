@@ -63,6 +63,29 @@ class SessionModelHistoryReplayTest {
     }
 
     @Test
+    void replayModelHistoryKeepsAssistantContextAfterToolRoleMessage() {
+        var events = List.of(
+                new StoredEvent(1L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.USER, "read file")),
+                new StoredEvent(2L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "checking")),
+                new StoredEvent(3L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.TOOL, "legacy output")),
+                new StoredEvent(4L, new SessionEvent.ToolCallStarted(
+                        "call-1", "file", "{\"path\":\"a.txt\"}")));
+
+        List<ModelMessage> history = SessionEvents.replayModelHistory(events);
+
+        assertEquals(List.of(
+                new ModelMessage.User("read file"),
+                new ModelMessage.Assistant(
+                        "checking",
+                        List.of(new StreamChunk.ToolCall(
+                                "call-1", "file", "{\"path\":\"a.txt\"}")))),
+                history);
+    }
+
+    @Test
     void replayModelHistoryGroupsParallelCallsIntoOneAssistantMessage() {
         var events = List.of(
                 new StoredEvent(1L, new SessionEvent.MessageAdded(

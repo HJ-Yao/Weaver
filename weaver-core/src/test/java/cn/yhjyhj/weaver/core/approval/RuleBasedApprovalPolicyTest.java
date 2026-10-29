@@ -210,6 +210,21 @@ class RuleBasedApprovalPolicyTest {
     }
 
     @Test
+    void planModeWinsOverPolicyAllowForIrreversibleCall() {
+        RuleBasedApprovalPolicy policy = new RuleBasedApprovalPolicy(
+                List.of(new ApprovalRule("custom", null, ApprovalDecision.ALLOW)),
+                PermissionMode.PLAN);
+
+        ApprovalResult result = policy.decide(
+                call("custom", "{}"),
+                Reversibility.IRREVERSIBLE,
+                ApprovalContext.interactive(
+                        "session-1", ApprovalGrantStore.none()));
+
+        assertEquals(new ApprovalResult(ApprovalDecision.DENY, "policy"), result);
+    }
+
+    @Test
     void acceptEditsAllowsRecoverableFileWriteAsk() {
         RuleBasedApprovalPolicy policy = new RuleBasedApprovalPolicy(
                 List.of(new ApprovalRule("file", "write", ApprovalDecision.ASK)),

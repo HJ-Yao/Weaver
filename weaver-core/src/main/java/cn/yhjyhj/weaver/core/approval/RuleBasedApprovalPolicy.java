@@ -52,51 +52,94 @@ public final class RuleBasedApprovalPolicy implements ApprovalPolicy {
      */
     @Override
     public ApprovalResult decide(
+            StreamChunk.ToolCall call, Reversibility reversibility, ApprovalContext context) {
+        requireInputs(call, reversibility, context);
+
+        // 顺序即安全边界：越危险、越不可逆的规则越先裁决。
+        ApprovalResult hardDeny = hardDeny(call);
+        if (hardDeny != null) {
+            return hardDeny;
+        }
+        ApprovalResult base = baseDecision(call, reversibility);
+        base = applyMode(base, reversibility);
+        base = applyGrant(base, call, context);
+        return applyUnattended(base, context);
+    }
+
+    /** 校验裁决所需的非空输入，保持原有参数名作为异常消息。 */
+    private static void requireInputs(
             StreamChunk.ToolCall call,
             Reversibility reversibility,
             ApprovalContext context) {
         Objects.requireNonNull(call, "call");
         Objects.requireNonNull(reversibility, "reversibility");
         Objects.requireNonNull(context, "context");
+    }
 
-        if (HARD_DENY_POLICY.isDenied(call)) {
-            return new ApprovalResult(ApprovalDecision.DENY, "hard-deny");
-        }
+    /** 命中不可被规则或会话授权绕过的硬禁区时返回 DENY，否则返回 null。 */
+    private static ApprovalResult hardDeny(StreamChunk.ToolCall call) {
+        return HARD_DENY_POLICY.isDenied(call)
+                ? new ApprovalResult(ApprovalDecision.DENY, "hard-deny")
+                : null;
+    }
 
+    /** 按 DENY、ASK、ALLOW 分层匹配规则，并在无命中时按回滚性回退。 */
+    private ApprovalResult baseDecision(
+            StreamChunk.ToolCall call, Reversibility reversibility) {
         String operation = ApprovalRules.operationOf(call.argumentsJson());
-        ApprovalDecision base = firstRule(call, operation, ApprovalDecision.DENY)
+        ApprovalDecision decision = firstRule(call, operation, ApprovalDecision.DENY)
                 .or(() -> firstRule(call, operation, ApprovalDecision.ASK))
                 .or(() -> firstRule(call, operation, ApprovalDecision.ALLOW))
                 .map(ApprovalRule::decision)
                 .orElseGet(() -> fallbackDecision(reversibility));
+        return switch (decision) {
+            case ALLOW -> new ApprovalResult(ApprovalDecision.ALLOW, "allowed");
+            case ASK -> new ApprovalResult(ApprovalDecision.ASK, "needs-user");
+            case DENY -> new ApprovalResult(ApprovalDecision.DENY, "policy");
+        };
+    }
 
+    /** 应用当前权限模式；PLAN 约束优先于普通 ALLOW，ACCEPT_EDITS 只放宽可恢复的 ASK。 */
+    private ApprovalResult applyMode(
+            ApprovalResult base, Reversibility reversibility) {
         // 模式修正在授权与无人值守处理前完成，确保会话授权不能绕过 PLAN 约束。
         if (mode == PermissionMode.PLAN && reversibility != Reversibility.REVERSIBLE) {
             return new ApprovalResult(ApprovalDecision.DENY, "policy");
         }
         if (mode == PermissionMode.ACCEPT_EDITS
-                && base == ApprovalDecision.ASK
+                && base.decision() == ApprovalDecision.ASK
                 && reversibility == Reversibility.RECOVERABLE) {
-            base = ApprovalDecision.ALLOW;
+            return new ApprovalResult(ApprovalDecision.ALLOW, "allowed");
         }
+        return base;
+    }
 
+    /** 当前会话已明确授权同一工具操作时，将 ASK 提升为 ALLOW。 */
+    private static ApprovalResult applyGrant(
+            ApprovalResult base,
+            StreamChunk.ToolCall call,
+            ApprovalContext context) {
+        if (base.decision() != ApprovalDecision.ASK) {
+            return base;
+        }
+        String operation = ApprovalRules.operationOf(call.argumentsJson());
         // 已授权操作先于无人值守降级，使同一会话中明确批准过的操作仍可继续。
         String grantOperation = operation == null ? "*" : operation;
-        if (base == ApprovalDecision.ASK
-                && context.grants().isGranted(
-                        context.sessionId(), call.toolName(), grantOperation)) {
+        if (context.grants().isGranted(
+                context.sessionId(), call.toolName(), grantOperation)) {
             return new ApprovalResult(
                     ApprovalDecision.ALLOW, "session-granted");
         }
-        if (base == ApprovalDecision.ASK && !context.interactive()) {
+        return base;
+    }
+
+    /** 非交互上下文中无法询问用户的 ASK 降级为 DENY。 */
+    private static ApprovalResult applyUnattended(
+            ApprovalResult base, ApprovalContext context) {
+        if (base.decision() == ApprovalDecision.ASK && !context.interactive()) {
             return new ApprovalResult(ApprovalDecision.DENY, "unattended");
         }
-
-        return switch (base) {
-            case ALLOW -> new ApprovalResult(ApprovalDecision.ALLOW, "allowed");
-            case ASK -> new ApprovalResult(ApprovalDecision.ASK, "needs-user");
-            case DENY -> new ApprovalResult(ApprovalDecision.DENY, "policy");
-        };
+        return base;
     }
 
     private Optional<ApprovalRule> firstRule(
