@@ -11,9 +11,11 @@ import org.springframework.validation.annotation.Validated;
  *
  * @param workspace 内置工具允许访问的工作区根目录
  * @param maxSteps 单轮 Agent 运行允许执行的最大步数
+ * @param storePath 会话事件 SQLite 数据库文件路径
  */
 @Validated
 @ConfigurationProperties(prefix = "weaver")
 public record WeaverProperties(
         @NotNull Path workspace,
-        @Min(1) int maxSteps) {}
+        @Min(1) int maxSteps,
+        @NotNull Path storePath) {}

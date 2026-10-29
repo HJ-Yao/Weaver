@@ -51,7 +51,7 @@ class RunServiceTest {
                 RuleBasedApprovalPolicy.defaults(),
                 ApprovalGate.denyAll(),
                 ApprovalGrantStore.none(),
-                new WeaverProperties(Path.of("."), 10),
+                new WeaverProperties(Path.of("."), 10, Path.of("target", "run-service.db")),
                 () -> emitter);
 
         SseEmitter returned = service.run(summary.id(), "hello");
@@ -84,7 +84,7 @@ class RunServiceTest {
                 RuleBasedApprovalPolicy.defaults(),
                 ApprovalGate.denyAll(),
                 ApprovalGrantStore.none(),
-                new WeaverProperties(Path.of("."), 10));
+                new WeaverProperties(Path.of("."), 10, Path.of("target", "run-service.db")));
 
         ResponseStatusException thrown = assertThrows(
                 ResponseStatusException.class,

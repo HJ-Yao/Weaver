@@ -20,6 +20,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <jacoco.version>0.8.13</jacoco.version>
     <spring-boot.version>3.5.3</spring-boot.version>
+    <sqlite.version>3.49.1.0</sqlite.version>
   </properties>
   <dependencyManagement>
     <dependencies>

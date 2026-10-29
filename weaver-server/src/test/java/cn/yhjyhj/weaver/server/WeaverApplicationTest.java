@@ -15,6 +15,7 @@ import cn.yhjyhj.weaver.server.config.WeaverProperties;
 import cn.yhjyhj.weaver.server.model.EchoModelClient;
 import cn.yhjyhj.weaver.server.service.RunService;
 import cn.yhjyhj.weaver.server.service.SessionService;
+import cn.yhjyhj.weaver.server.store.SqliteEventStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,6 +32,8 @@ class WeaverApplicationTest {
 
     private static final Path workspace =
             Path.of("target", "weaver-test-workspace").toAbsolutePath(); // 隔离内置工具的工作区
+    private static final Path eventStore =
+            Path.of("target", "test-weaver.db").toAbsolutePath(); // 隔离事件持久化数据库
 
     @Autowired
     private ApplicationContext context; // 用于核对装配结果
@@ -44,6 +47,7 @@ class WeaverApplicationTest {
     static void configureWorkspace(DynamicPropertyRegistry registry) {
         registry.add("weaver.workspace", () -> workspace.toString());
         registry.add("weaver.max-steps", () -> 25);
+        registry.add("weaver.store-path", () -> eventStore.toString());
     }
 
     @Test
@@ -51,8 +55,9 @@ class WeaverApplicationTest {
         WeaverProperties properties = context.getBean(WeaverProperties.class);
         assertEquals(workspace.toRealPath(), properties.workspace().toRealPath());
         assertEquals(25, properties.maxSteps());
+        assertEquals(eventStore, properties.storePath());
 
-        assertTrue(context.getBean(SessionEventStore.class) != null);
+        assertTrue(context.getBean(SessionEventStore.class) instanceof SqliteEventStore);
         ToolRegistry tools = context.getBean(ToolRegistry.class);
         assertEquals(
                 java.util.List.of("file", "git", "shell"),

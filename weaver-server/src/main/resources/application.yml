@@ -4,3 +4,4 @@ server:
 weaver:
   workspace: ${user.dir}
   max-steps: 50
+  store-path: ${user.home}/.weaver/weaver.db

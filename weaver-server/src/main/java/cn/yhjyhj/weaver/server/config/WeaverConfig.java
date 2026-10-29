@@ -5,7 +5,6 @@ import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.approval.InMemoryApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
-import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
@@ -13,6 +12,7 @@ import cn.yhjyhj.weaver.core.tool.builtin.FileTool;
 import cn.yhjyhj.weaver.core.tool.builtin.GitTool;
 import cn.yhjyhj.weaver.core.tool.builtin.ShellTool;
 import cn.yhjyhj.weaver.server.model.EchoModelClient;
+import cn.yhjyhj.weaver.server.store.SqliteEventStore;
 import java.nio.file.Path;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
@@ -23,13 +23,14 @@ import org.springframework.context.annotation.Configuration;
 public class WeaverConfig {
 
     /**
-     * 创建进程内会话事件事实源。
+     * 创建由 Weaver 配置指定路径的 SQLite 会话事件事实源。
      *
-     * @return 空的并发事件存储
+     * @param properties Weaver 运行配置
+     * @return 可持久化、可回放的 SQLite 事件存储
      */
-    @Bean
-    public SessionEventStore eventStore() {
-        return new InMemorySessionEventStore();
+    @Bean(destroyMethod = "close")
+    public SessionEventStore eventStore(WeaverProperties properties) {
+        return new SqliteEventStore(properties.storePath());
     }
 
     /**
