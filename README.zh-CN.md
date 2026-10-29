@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/brand/weaver-logo.svg" width="180" alt="Weft，Weaver 吉祥物">
+  <img src="docs/brand/weaver-logo.png" width="180" alt="Weaver logo">
 </p>
 
 # Weaver
