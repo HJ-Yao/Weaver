@@ -40,6 +40,33 @@ npm install
 npm run dev           # web console on http://localhost:5173
 ```
 
+### Running the server from `.env`
+
+The server reads `weaver.*` properties. Put them in a `.env` file at the
+repository root — it is git-ignored, so credentials never reach the repository:
+
+```properties
+weaver.workspace=${user.dir}/..
+weaver.max-steps=20
+weaver.store-path=${user.dir}/../local/dev/sessions.db
+weaver.model.protocol=openai-chat-completions
+weaver.model.base-url=https://api.deepseek.com
+weaver.model.model=deepseek-chat
+weaver.model.api-key=sk-...
+```
+
+Then start it from the server module:
+
+```bash
+cd weaver-server
+mvn spring-boot:run "-Dspring-boot.run.arguments=--spring.config.additional-location=optional:file:../.env[.properties]"
+```
+
+`${user.dir}` is the launch directory (`weaver-server/`), so `..` resolves to
+the repository root. The `optional:` prefix keeps the command working before
+the file exists; without a `.env` every property must be passed as `--weaver.*`
+on the command line.
+
 Rules for AI agents working on this repo: [AGENTS.md](AGENTS.md).
 
 ## License

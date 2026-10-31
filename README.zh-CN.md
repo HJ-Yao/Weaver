@@ -40,6 +40,32 @@ npm install
 npm run dev           # 控制台 http://localhost:5173
 ```
 
+### 从 `.env` 启动服务端
+
+服务端读取 `weaver.*` 配置。把下面内容写到仓库根目录的 `.env`（已被 git 忽略，
+密钥不会进入仓库）：
+
+```properties
+weaver.workspace=${user.dir}/..
+weaver.max-steps=20
+weaver.store-path=${user.dir}/../local/dev/sessions.db
+weaver.model.protocol=openai-chat-completions
+weaver.model.base-url=https://api.deepseek.com
+weaver.model.model=deepseek-chat
+weaver.model.api-key=sk-...
+```
+
+然后在服务端模块下启动：
+
+```bash
+cd weaver-server
+mvn spring-boot:run "-Dspring-boot.run.arguments=--spring.config.additional-location=optional:file:../.env[.properties]"
+```
+
+`${user.dir}` 是启动目录（`weaver-server/`），因此 `..` 指向仓库根目录；
+`optional:` 让命令在 `.env` 不存在时也能启动。没有 `.env` 时，所有配置都需要
+通过命令行的 `--weaver.*` 传入。
+
 AI 协作规范见 [AGENTS.md](AGENTS.md)。
 
 ## 许可证
