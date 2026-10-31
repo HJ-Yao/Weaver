@@ -16,6 +16,7 @@ import cn.yhjyhj.weaver.server.service.RunService;
 import cn.yhjyhj.weaver.server.service.RunServiceDependencies;
 import cn.yhjyhj.weaver.server.service.SessionService;
 import cn.yhjyhj.weaver.server.store.SqliteEventStore;
+import cn.yhjyhj.weaver.server.workspace.WorkspaceDiffService;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -50,6 +51,17 @@ public class WeaverConfig {
                 new FileTool(root),
                 new ShellTool(root),
                 new GitTool(root)));
+    }
+
+    /**
+     * 创建只读取 Weaver 工作区未提交改动的服务。
+     *
+     * @param properties Weaver 运行配置
+     * @return 绑定到配置工作区的 diff 服务
+     */
+    @Bean
+    public WorkspaceDiffService workspaceDiffService(WeaverProperties properties) {
+        return new WorkspaceDiffService(properties.workspace());
     }
 
     /**

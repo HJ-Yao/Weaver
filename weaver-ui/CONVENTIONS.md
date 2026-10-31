@@ -135,7 +135,6 @@ pages → widgets → features → entities → shared
 
 - [ ] `SessionEvent[]` 折叠为 transcript，替换 `transcriptFromSnapshot` 的近似实现
 - [ ] 回放时间线由真实事件驱动（替换 `ReplayPanel` 中的 `DEMO_EVENTS`）
-- [ ] Diff 由工作区接口提供（替换 `entities/diff/model.ts` 的演示数据）
 
 **M4 — 产品化**
 

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { sessionApi } from '@/shared/api/sessions';
 import { streamMessage } from '@/shared/api/stream';
+import { IS_MOCK } from '@/shared/config/runtime';
 import { transcriptFromSnapshot } from './model';
 import type { ApprovalItem, MessageItem, SessionSummary, ToolCallItem, TranscriptItem } from './model';
 
@@ -11,9 +12,6 @@ import type { ApprovalItem, MessageItem, SessionSummary, ToolCallItem, Transcrip
  * 将它放在这里而不是页面组件中，侧栏、上下文面板和输入区就能读取同一份事实，
  * 无需逐层传递 props。
  */
-
-/** 为 `false` 时从 Spring Boot 服务端流式读取，否则使用模拟数据。 */
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
 
 /** 在真实流式调用成为默认路径前使用的固定回复。 */
 const MOCK_REPLY = '收到。我会先读取相关文件，再给出改动方案；涉及写操作时会在这里请求审批。';
@@ -133,17 +131,17 @@ export const useSessionStore = create<SessionState>()((set, get) => {
   };
 
   return {
-    sessions: USE_MOCK ? demoSessions : [],
-    activeSessionId: USE_MOCK ? (demoSessions[0]?.id ?? null) : null,
-    transcript: USE_MOCK ? demoTranscript : [],
+    sessions: IS_MOCK ? demoSessions : [],
+    activeSessionId: IS_MOCK ? (demoSessions[0]?.id ?? null) : null,
+    transcript: IS_MOCK ? demoTranscript : [],
     running: false,
-    status: USE_MOCK ? 'ready' : 'idle',
+    status: IS_MOCK ? 'ready' : 'idle',
     error: null,
 
     loadSessions: async (force = false) => {
       if (!force && get().status !== 'idle') return;
 
-      if (USE_MOCK) {
+      if (IS_MOCK) {
         set({ status: 'ready', error: null });
         return;
       }
@@ -169,7 +167,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
     },
 
     selectSession: async (id) => {
-      if (USE_MOCK) {
+      if (IS_MOCK) {
         set({ activeSessionId: id });
         return;
       }
@@ -198,7 +196,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
     },
 
     createSession: async (title = '新会话') => {
-      if (USE_MOCK) {
+      if (IS_MOCK) {
         const session: SessionSummary = {
           id: `${Date.now()}`,
           title,
@@ -253,7 +251,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
 
       set((state) => ({ transcript: [...state.transcript, user, reply], running: true }));
 
-      if (USE_MOCK) {
+      if (IS_MOCK) {
         // 模拟响应同步完成，测试不依赖定时器。
         // TODO(M2): 服务端始终可用后移除模拟分支。
         updateItem(reply.id, (item) =>
@@ -343,7 +341,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
       }));
 
       const sessionId = get().activeSessionId;
-      if (!USE_MOCK && sessionId) {
+      if (!IS_MOCK && sessionId) {
         // 被阻塞的运行正在等待这次 HTTP 调用；若失败，服务端会将其表现为超时。
         void sessionApi.resolveApproval(sessionId, callId, approved).catch(() => undefined);
       }

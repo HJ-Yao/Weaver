@@ -1,23 +1,7 @@
-/**
- * 工作区 diff 模型。
- *
- * TODO(M2): 服务端提供工作区变更后，用 `GET /sessions/{id}/diff` 的响应
- * 替换 `demoDiffFiles`。
- */
+import type { FileDiffDto } from '@/shared/api/workspace';
 
-/** 统一 diff 中渲染的一行。 */
-export interface DiffLine {
-  kind: 'context' | 'add' | 'del';
-  text: string;
-}
-
-/** 一个变更文件及其预先计算好的统一 diff。 */
-export interface DiffFile {
-  path: string;
-  additions: number;
-  deletions: number;
-  lines: DiffLine[];
-}
+/** 一个工作区变更文件及其后端返回的统一 diff。 */
+export type DiffFile = FileDiffDto;
 
 /** 后端接口就绪前由上下文面板使用的演示数据。 */
 export const demoDiffFiles: DiffFile[] = [
