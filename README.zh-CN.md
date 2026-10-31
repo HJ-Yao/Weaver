@@ -26,7 +26,7 @@ English | [简体中文](README.zh-CN.md)
 | `weaver-mcp` | MCP 客户端接入（官方 Java SDK） |
 | `weaver-server` | Spring Boot 应用：REST + SSE、SQLite 事件存储、OpenAI 兼容与 Anthropic 模型客户端 |
 | `weaver-cli` | 命令行入口（核心之上的薄壳） |
-| `weaver-ui` | React 前端（计划中） |
+| `weaver-ui` | React 控制台：会话、审批、插件与设置（骨架） |
 
 ## 开发
 
@@ -34,6 +34,10 @@ English | [简体中文](README.zh-CN.md)
 mvn -q compile        # 编译全部模块
 mvn -q test           # 运行测试
 mvn -q verify         # 测试 + JaCoCo 分支覆盖率门槛
+
+cd weaver-ui
+npm install
+npm run dev           # 控制台 http://localhost:5173
 ```
 
 AI 协作规范见 [AGENTS.md](AGENTS.md)。
