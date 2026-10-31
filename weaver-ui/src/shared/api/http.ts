@@ -1,15 +1,14 @@
 /**
- * HTTP boundary.
+ * HTTP 边界。
  *
- * Every network call in the app goes through this module so that base URL,
- * headers and error shape stay in one place. Components must never call
- * `fetch` directly.
+ * 应用中的所有网络调用都经过此模块，使基础 URL、请求头和错误结构集中在一处。
+ * 组件不得直接调用 `fetch`。
  */
 
-/** Base path; Vite proxies `/api` to Spring Boot in development. */
+/** 基础路径；开发期间 Vite 将 `/api` 代理到 Spring Boot。 */
 export const API_BASE = import.meta.env.VITE_API_BASE ?? '/api';
 
-/** Error carrying the HTTP status so callers can branch on 404 vs 5xx. */
+/** 携带 HTTP 状态的错误，调用方据此区分 404 与 5xx。 */
 export class ApiError extends Error {
   readonly status: number;
 
@@ -21,10 +20,9 @@ export class ApiError extends Error {
 }
 
 /**
- * Perform a JSON request and deserialize the response.
+ * 执行 JSON 请求并反序列化响应。
  *
- * `204 No Content` resolves to `undefined`, which is why the return type is
- * asserted rather than parsed.
+ * `204 No Content` 会解析为 `undefined`，因此返回类型通过断言指定，而不进行解析。
  */
 export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {

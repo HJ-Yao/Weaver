@@ -1,6 +1,6 @@
 /*
- * Sidebar chrome shared by the session list and the plugin navigation.
- * Both panels live in this widget folder, so they share one style module.
+ * 会话列表与插件导航共用的侧栏外观。
+ * 两个面板都位于当前 widget 目录，因此共用一个样式模块。
  */
 
 .sidebar {
@@ -96,7 +96,7 @@
   border-color: var(--accent);
 }
 
-/* ---------- sessions ---------- */
+/* ---------- 会话 ---------- */
 
 .session {
   position: relative;
@@ -152,7 +152,7 @@
   background: var(--accent);
 }
 
-/* ---------- plugin navigation ---------- */
+/* ---------- 插件导航 ---------- */
 
 .navList {
   display: flex;
@@ -218,7 +218,7 @@
   color: var(--faint);
 }
 
-/* ---------- shared bits ---------- */
+/* ---------- 共用部分 ---------- */
 
 .footer {
   display: flex;

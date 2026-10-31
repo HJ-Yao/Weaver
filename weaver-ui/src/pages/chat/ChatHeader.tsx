@@ -3,9 +3,9 @@ import { useUiStore } from '@/app/ui-store';
 import styles from './ChatHeader.module.css';
 
 /**
- * Conversation header: title, run indicator and page-level actions.
+ * 对话页头：标题、运行状态指示和页面级操作。
  *
- * TODO(M2): the export action has no backend yet, so it only reports status.
+ * TODO(M2): 导出操作尚无后端，目前只显示状态。
  */
 export function ChatHeader() {
   const title = useSessionStore(

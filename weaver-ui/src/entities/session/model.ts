@@ -1,56 +1,55 @@
 import type { SessionSnapshotDto } from '@/shared/api/sessions';
 
 /**
- * Session domain model.
+ * 会话领域模型。
  *
- * The UI never renders raw `SessionEvent`s directly. It renders a *transcript*:
- * a flat, ordered list of things the user can see. When event replay lands
- * (TODO(M3)) the transcript becomes the fold output of `SessionEvent[]`; today
- * it is assembled from the snapshot the server already computes.
+ * UI 从不直接渲染原始 `SessionEvent`，而是渲染 `transcript`：
+ * 一份用户可见内容的扁平有序列表。事件回放落地后（TODO(M3)），
+ * `transcript` 将成为 `SessionEvent[]` 的折叠结果；目前由服务端已计算好的快照组装。
  */
 
-/** Metadata shown in the session list. */
+/** 会话列表中显示的元数据。 */
 export interface SessionSummary {
   id: string;
   title: string;
-  /** ISO-8601 timestamp; formatted for display by `shared/lib/format`. */
+  /** ISO-8601 时间戳；由 `shared/lib/format` 格式化后显示。 */
   createdAt: string;
-  /** Completed agent steps, when the server reports them. */
+  /** 服务端报告时记录的已完成 Agent 步骤数。 */
   stepCount?: number;
 }
 
-/** A chat bubble. `seq` is the event sequence number, when known. */
+/** 聊天消息。`seq` 是已知的事件序号。 */
 export interface MessageItem {
   kind: 'message';
   id: string;
   role: 'user' | 'assistant';
   content: string;
   seq?: number;
-  /** True while model deltas are still arriving. */
+  /** 模型增量仍在到达时为 `true`。 */
   streaming?: boolean;
 }
 
-/** Lifecycle of a single tool invocation. */
+/** 单次工具调用的生命周期。 */
 export type ToolStatus = 'running' | 'done' | 'failed';
 
-/** A tool call card rendered inline in the transcript. */
+/** 内联渲染在 transcript 中的工具调用卡片。 */
 export interface ToolCallItem {
   kind: 'tool';
-  /** `callId` from the model; pairs the start and completion events. */
+  /** 模型提供的 `callId`，用于关联开始事件与完成事件。 */
   id: string;
   toolName: string;
   argumentsJson: string;
   status: ToolStatus;
   durationMs?: number;
   resultText?: string;
-  /** UI-only: whether the result body is expanded. */
+  /** 仅用于 UI：结果正文是否展开。 */
   expanded: boolean;
 }
 
-/** Whether the user has answered an approval request. */
+/** 用户是否已响应审批请求。 */
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
-/** An inline approval request. Approving resumes the blocked run. */
+/** 内联审批请求。批准后恢复被阻塞的运行。 */
 export interface ApprovalItem {
   kind: 'approval';
   id: string;
@@ -61,16 +60,15 @@ export interface ApprovalItem {
   status: ApprovalStatus;
 }
 
-/** Anything renderable in the message column. */
+/** 消息列中可以渲染的任意内容。 */
 export type TranscriptItem = MessageItem | ToolCallItem | ApprovalItem;
 
 /**
- * Rebuild a transcript from a server snapshot.
+ * 根据服务端快照重建 transcript。
  *
- * Limitation: `SessionSnapshot` carries no global ordering between messages,
- * tool calls and approvals, so tools/approvals are appended after messages.
- * TODO(M3): replace with an ordered `SessionEvent[]` fold once the server
- * exposes the raw event stream.
+ * 限制：`SessionSnapshot` 不包含消息、工具调用和审批之间的全局顺序，
+ * 因此工具与审批项会追加在消息之后。
+ * TODO(M3): 服务端暴露原始事件流后，改用有序的 `SessionEvent[]` 折叠。
  */
 export function transcriptFromSnapshot(snapshot: SessionSnapshotDto): TranscriptItem[] {
   const messages: MessageItem[] = snapshot.messages

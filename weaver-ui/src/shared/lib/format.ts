@@ -1,17 +1,16 @@
 /**
- * Display formatters.
+ * 展示格式化函数。
  *
- * Pure functions only — they take explicit inputs so they can be unit tested
- * without freezing the clock globally.
+ * 只包含纯函数：显式接收输入，因此无需全局冻结时钟即可进行单元测试。
  */
 
-/** Format an elapsed duration as `142ms` or `3.1s`. */
+/** 将耗时格式化为 `142ms` 或 `3.1s`。 */
 export function formatDuration(milliseconds: number): string {
   if (milliseconds < 1000) return `${Math.round(milliseconds)}ms`;
   return `${(milliseconds / 1000).toFixed(1)}s`;
 }
 
-/** Format an ISO timestamp as a short relative label in the UI language. */
+/** 将 ISO 时间戳格式化为界面语言中的简短相对时间标签。 */
 export function formatRelativeTime(iso: string, now: number = Date.now()): string {
   const time = new Date(iso).getTime();
   if (Number.isNaN(time)) return '';

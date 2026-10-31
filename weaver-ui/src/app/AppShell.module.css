@@ -1,8 +1,8 @@
 /*
- * Shell layout.
+ * 外壳布局。
  *
- * Column widths are CSS variables so a route or a collapse toggle only changes
- * one custom property; the grid template stays declared once.
+ * 列宽由 CSS 变量控制，路由或折叠切换只需修改一个自定义属性；
+ * grid 模板保持只声明一次。
  */
 
 .app {
@@ -11,13 +11,13 @@
   height: 100%;
 }
 
-/* ---------- top bar ---------- */
+/* ---------- 顶栏 ---------- */
 
 .topbar {
   display: flex;
   align-items: center;
   gap: 20px;
-  /* 8.5px + the 38px button centres it on the rail's 55px content box below. */
+  /* 8.5px 加上 38px 高的按钮，使其在下方 55px 高的 rail 内容区中居中。 */
   padding: 0 var(--space-5) 0 8.5px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
@@ -72,7 +72,7 @@
   letter-spacing: 0.12em;
 }
 
-/* ---------- four-column shell ---------- */
+/* ---------- 四列外壳 ---------- */
 
 .shell {
   --sidebar-width: 270px;
@@ -92,7 +92,7 @@
   --context-width: 0px;
 }
 
-/* Settings is a full-width page: the rail stays, the other columns collapse. */
+/* 设置页占满宽度：保留 rail，其余列收起。 */
 .shell[data-route='settings'] {
   --sidebar-width: 0px;
   --context-width: 0px;
@@ -119,7 +119,7 @@
   background: var(--bg);
 }
 
-/* ---------- responsive ---------- */
+/* ---------- 响应式 ---------- */
 
 @media (max-width: 1180px) {
   .shell {
@@ -134,5 +134,5 @@
     --context-width: 0px;
   }
 
-  /* TODO(M4): replace the hidden context panel with a drawer at this width. */
+  /* TODO(M4): 在此宽度下将隐藏的上下文面板改为抽屉。 */
 }

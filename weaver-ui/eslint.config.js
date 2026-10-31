@@ -5,10 +5,10 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 /**
- * Flat ESLint config.
+ * ESLint 扁平配置。
  *
- * Rules stay intentionally lean: correctness and React hook safety only.
- * Formatting is Prettier's job, so no stylistic rules live here.
+ * 规则刻意保持精简，只覆盖正确性与 React Hook 安全。
+ * 格式由 Prettier 负责，因此这里不配置样式规则。
  */
 export default tseslint.config(
   { ignores: ['dist', 'node_modules', 'coverage'] },

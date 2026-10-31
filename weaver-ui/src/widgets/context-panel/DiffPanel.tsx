@@ -3,11 +3,11 @@ import { demoDiffFiles } from '@/entities/diff/model';
 import styles from './ContextPanel.module.css';
 
 /**
- * Changed files in the workspace.
+ * 工作区中的变更文件。
  *
- * Clicking a file opens the overlay viewer instead of appending to the chat:
- * the transcript stays an append-only event record.
- * TODO(M2): replace `demoDiffFiles` with the workspace diff endpoint.
+ * 点击文件会打开浮层查看器，而不会向聊天中追加内容，
+ * 使 transcript 保持为只追加的事件记录。
+ * TODO(M2): 用工作区 diff 接口替换 `demoDiffFiles`。
  */
 export function DiffPanel() {
   const openDiffViewer = useUiStore((state) => state.openDiffViewer);

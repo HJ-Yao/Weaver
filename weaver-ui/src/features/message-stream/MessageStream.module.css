@@ -53,7 +53,7 @@
   background: var(--panel-2);
 }
 
-/* A streaming bubble stays visually identical; the caret marks progress. */
+/* 流式消息气泡保持原有外观，仅用光标标记进度。 */
 .streaming::after {
   content: '▍';
   margin-left: 2px;

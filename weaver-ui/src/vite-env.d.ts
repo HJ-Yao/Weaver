@@ -1,9 +1,9 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** API base path; defaults to `/api` (proxied by Vite in development). */
+  /** API 基础路径；默认为 `/api`，开发期间由 Vite 代理。 */
   readonly VITE_API_BASE?: string;
-  /** Set to `"false"` to stream from the real server instead of the mock store. */
+  /** 设为 `"false"` 时从真实服务端流式读取，不使用模拟 store。 */
   readonly VITE_USE_MOCK?: string;
 }
 

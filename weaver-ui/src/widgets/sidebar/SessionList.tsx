@@ -4,10 +4,10 @@ import { formatRelativeTime } from '@/shared/lib/format';
 import styles from './Sidebar.module.css';
 
 /**
- * Conversation list with client-side filtering.
+ * 带前端筛选的会话列表。
  *
- * Filtering is local because the sidebar only holds the sessions already
- * loaded; TODO(M2): debounce a server-side search once the list is paged.
+ * 侧栏只持有已加载的会话，因此筛选在本地进行；
+ * TODO(M2): 列表分页后为服务端搜索增加防抖。
  */
 export function SessionList() {
   const sessions = useSessionStore((state) => state.sessions);
@@ -57,9 +57,8 @@ export function SessionList() {
         {status === 'idle' || status === 'loading' ? (
           <p className={styles.state}>加载中…</p>
         ) : status === 'error' ? (
-          // A failed detail request also lands here, so the list is hidden while
-          // the chat keeps the previous transcript.
-          // TODO(M2): split list and detail errors and show the latter as a banner.
+          // 详情请求失败也会进入此分支；此时隐藏列表，聊天区则保留之前的 transcript。
+          // TODO(M2): 拆分列表错误与详情错误，并将详情错误显示为横幅。
           <div className={styles.state} role="alert">
             <p className={styles.error}>{error ?? '会话加载失败'}</p>
             <button

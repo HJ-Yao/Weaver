@@ -2,35 +2,34 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Icon } from './Icon';
 import styles from './Dropdown.module.css';
 
-/** One selectable row in a dropdown menu. */
+/** 下拉菜单中的一个可选项。 */
 export interface DropdownOption {
   id: string;
   label: string;
-  /** Secondary line, usually a path or protocol name. */
+  /** 次要说明行，通常是路径或协议名。 */
   meta?: string;
 }
 
 interface DropdownProps {
-  /** Accessible name for the trigger. */
+  /** 触发控件的无障碍名称。 */
   label: string;
   options: DropdownOption[];
   value: string;
   onChange: (id: string) => void;
-  /** `up` is used by the composer, which sits at the bottom of the viewport. */
+  /** 输入区位于视口底部，因此使用 `up`。 */
   placement?: 'up' | 'down';
-  /** Which edge the menu is anchored to. `right` keeps the composer's menu on screen. */
+  /** 菜单锚定的边缘；`right` 可让输入区的菜单保持在屏幕内。 */
   align?: 'left' | 'right';
-  /** Shown when no option matches `value`. */
+  /** 没有选项匹配 `value` 时显示的内容。 */
   placeholder?: string;
 }
 
 /**
- * A small accessible picker.
+ * 小型无障碍选择器。
  *
- * Behaviour: click toggles, Escape closes, clicking outside closes, and the
- * selected option is marked with `aria-current`. It deliberately does not
- * implement full listbox semantics (roving tabindex) yet — each option is a
- * real button, so Tab and Enter work natively.
+ * 行为：点击切换，Escape 关闭，点击外部关闭，选中项用 `aria-current` 标记。
+ * 目前有意不实现完整的 listbox 语义（roving tabindex）；每个选项都是真实按钮，
+ * 因此 Tab 和 Enter 可原生工作。
  */
 export function Dropdown({
   label,

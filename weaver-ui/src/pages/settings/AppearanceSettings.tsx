@@ -14,10 +14,10 @@ const ACCENTS: { id: Accent; label: string; color: string }[] = [
 ];
 
 /**
- * Theme and accent.
+ * 主题与强调色。
  *
- * Both write straight to the UI store, which applies the tokens to `<html>`
- * immediately —there is no "apply" step to forget.
+ * 二者都直接写入 UI store，由 store 立即将 token 应用到 `<html>`，
+ * 因此没有容易遗漏的“应用”步骤。
  */
 export function AppearanceSettings() {
   const theme = useUiStore((state) => state.theme);
@@ -52,7 +52,7 @@ export function AppearanceSettings() {
         </div>
       </div>
 
-      {/* TODO(M4): wire font size and density once the shell supports a compact mode. */}
+      {/* TODO(M4): 外壳支持紧凑模式后接入字号与密度设置。 */}
       <label className={styles.field}>
         <span>字号</span>
         <select disabled title="尚未实现">

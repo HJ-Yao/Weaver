@@ -4,11 +4,10 @@ import { Icon } from '@/shared/ui/Icon';
 import styles from './DiffViewer.module.css';
 
 /**
- * Full-width diff overlay.
+ * 全宽 diff 浮层。
  *
- * Rendered inside the chat column (not a modal) so the context panel stays
- * usable — clicking another file swaps the content instead of stacking viewers.
- * Escape closes it and focus moves back to the chat.
+ * 渲染在聊天列内部而非模态框中，因此上下文面板仍可使用；
+ * 点击另一个文件会替换内容，不会叠加查看器。按 Escape 关闭并把焦点还给聊天区。
  */
 export function DiffViewer() {
   const file = useUiStore((state) => state.openDiff);

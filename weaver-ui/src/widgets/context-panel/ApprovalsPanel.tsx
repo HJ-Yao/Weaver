@@ -4,10 +4,10 @@ import { useSessionStore } from '@/entities/session/store';
 import styles from './ContextPanel.module.css';
 
 /**
- * Approval queue.
+ * 审批队列。
  *
- * Pending items are actionable here *and* inline in the transcript; both call
- * the same store action, so the two surfaces cannot disagree.
+ * 待处理项既可在此处操作，也可在 transcript 中内联操作；两处调用同一个
+ * store action，因此不会出现状态不一致。
  */
 export function ApprovalsPanel() {
   const approvals = useSessionStore(

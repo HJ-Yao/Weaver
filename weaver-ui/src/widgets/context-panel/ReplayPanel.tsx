@@ -3,11 +3,11 @@ import { Icon } from '@/shared/ui/Icon';
 import styles from './ContextPanel.module.css';
 
 /**
- * Event timeline with playback.
+ * 带播放控制的事件时间线。
  *
- * TODO(M3): replace `DEMO_EVENTS` with a fold over `SessionEvent[]` served by
- * the session detail endpoint — replay must be "现场 == 回放", not a scripted
- * list. Playback controls are local because they do not affect the live session.
+ * TODO(M3): 用会话详情接口提供的 `SessionEvent[]` 折叠结果替换 `DEMO_EVENTS`；
+ * 回放必须满足“现场 == 回放”，不能是脚本化列表。播放控件只影响本地状态，
+ * 不会影响实时会话。
  */
 const DEMO_EVENTS = [
   '用户消息',
@@ -24,7 +24,7 @@ const DEMO_EVENTS = [
   '运行结束',
 ];
 
-/** One tick of playback, in milliseconds. */
+/** 播放的一次步进，单位为毫秒。 */
 const TICK_MS = 700;
 
 export function ReplayPanel() {

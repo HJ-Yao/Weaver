@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { useSessionStore } from '@/entities/session/store';
 import { routes } from './router';
 
-/** Initial store snapshot, restored before each test so cases stay independent. */
+/** 初始 store 快照；每个测试前恢复，确保用例彼此独立。 */
 const initialState = useSessionStore.getState();
 
 function renderApp(path = '/') {

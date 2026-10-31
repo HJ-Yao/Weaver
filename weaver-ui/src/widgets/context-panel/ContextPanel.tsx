@@ -15,10 +15,10 @@ const TABS: { id: ContextTab; label: string }[] = [
 ];
 
 /**
- * Right-hand context panel.
+ * 右侧上下文面板。
  *
- * The selected tab lives in the UI store so other surfaces (the header's
- * "回放" action) can open a specific tab without owning the panel.
+ * 当前标签页保存在 UI store 中，其他界面（例如页头的“回放”操作）
+ * 无需持有此面板即可打开指定标签页。
  */
 export function ContextPanel() {
   const activeTab = useUiStore((state) => state.contextTab);

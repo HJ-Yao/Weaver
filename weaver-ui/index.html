@@ -7,14 +7,14 @@
     <link rel="icon" href="/brand/weaver-logo.png" />
     <title>Weaver — Agent Harness</title>
     <script>
-      // Apply the persisted theme before first paint; without this the app flashes the default dark ground.
+      // 首屏渲染前应用已持久化的主题，否则会先闪现默认的深色背景。
       try {
         const theme = localStorage.getItem('weaver.theme');
         const accent = localStorage.getItem('weaver.accent');
         if (theme) document.documentElement.dataset.theme = theme;
         if (accent) document.documentElement.dataset.accent = accent;
       } catch (error) {
-        // Storage may be unavailable (private mode); the default theme is a safe fallback.
+        // 隐私模式等场景可能无法访问存储；此时回退到默认主题即可。
       }
     </script>
   </head>

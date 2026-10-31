@@ -1,7 +1,7 @@
 import { useSearchParams } from 'react-router-dom';
 import styles from './Sidebar.module.css';
 
-/** Static catalogue; TODO(M2): load from the MCP registry and the skill index. */
+/** 静态目录；TODO(M2): 从 MCP 注册表和技能索引加载。 */
 const PLUGINS = [
   { id: 'agentic-git', name: 'agentic-git', meta: 'stdio · 12 个工具', status: 'ok' as const },
   { id: 'agentic-shell', name: 'agentic-shell', meta: 'stdio · 8 个工具', status: 'ok' as const },
@@ -15,10 +15,10 @@ const SKILLS = [
 ];
 
 /**
- * Plugin sidebar.
+ * 插件侧栏。
  *
- * The active tab lives in the URL (`/plugins?tab=skill`) so the sidebar and the
- * page body cannot drift apart and the view is linkable.
+ * 当前标签页保存在 URL（`/plugins?tab=skill`）中，使侧栏和页面正文不会脱节，
+ * 且视图可直接链接。
  */
 export function PluginNav() {
   const [params, setParams] = useSearchParams();

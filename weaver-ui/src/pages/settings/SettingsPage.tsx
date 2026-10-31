@@ -14,11 +14,10 @@ const TABS: { id: SettingsTab; label: string }[] = [
 ];
 
 /**
- * Settings screen.
+ * 设置页面。
  *
- * Rendered as a full-width page (the shell collapses the sidebar and context
- * columns) rather than a dialog, so long panels such as the shortcut list keep
- * their own scroll and the rail stays reachable.
+ * 以全宽页面而非对话框渲染（外壳会收起 sidebar 和 context 列），
+ * 这样快捷键列表等长面板可以独立滚动，rail 也始终可访问。
  */
 export function SettingsPage() {
   const [tab, setTab] = useState<SettingsTab>('appearance');

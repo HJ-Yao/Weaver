@@ -4,21 +4,21 @@ import { useSessionStore } from '@/entities/session/store';
 import { formatDuration } from '@/shared/lib/format';
 import styles from './ContextPanel.module.css';
 
-/** Tools the runtime exposes; TODO(M2): load from `ToolRegistry`. */
+/** 运行时暴露的工具；TODO(M2): 从 `ToolRegistry` 加载。 */
 const AVAILABLE_TOOLS = [
   { name: 'file', meta: 'read / write / list' },
   { name: 'shell', meta: '30s · 64KB' },
   { name: 'git', meta: 'status / diff / commit' },
 ];
 
-/** Explicit map so CSS class names stay searchable (no dynamic string lookup). */
+/** 使用显式映射，使 CSS 类名仍可搜索，避免动态字符串查找。 */
 const STATUS_CLASS: Record<ToolCallItem['status'], string> = {
   running: styles.statusRunning,
   done: styles.statusDone,
   failed: styles.statusFailed,
 };
 
-/** Tool calls in the current run, plus the registry catalogue. */
+/** 当前运行中的工具调用及注册表目录。 */
 export function ToolsPanel() {
   const tools = useSessionStore(
     useShallow((state) =>

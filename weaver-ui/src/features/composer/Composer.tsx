@@ -6,9 +6,8 @@ import { Icon } from '@/shared/ui/Icon';
 import styles from './Composer.module.css';
 
 /**
- * TODO(M2): these catalogue entries should come from the server (workspace
- * registry and `~/.weaver/config.json`). Hard-coded only so the shell is usable
- * before those endpoints exist.
+ * TODO(M2): 这些目录项应来自服务端（工作区注册表和 `~/.weaver/config.json`）。
+ * 当前硬编码仅为在这些接口就绪前保持外壳可用。
  */
 const WORKSPACES: DropdownOption[] = [
   { id: 'weaver', label: 'Weaver', meta: 'F:\\Back-End\\Project\\PrivateProjects\\Weaver' },
@@ -40,10 +39,9 @@ const MODELS: DropdownOption[] = [
 ];
 
 /**
- * Message composer.
+ * 消息输入区。
  *
- * Owns only the draft text. Sending delegates to the session store, so the
- * composer stays unaware of mock vs live streaming.
+ * 仅持有草稿文本。发送动作委托给会话 store，因此输入区无需感知模拟流还是真实流。
  */
 export function Composer() {
   const sendMessage = useSessionStore((state) => state.sendMessage);
@@ -57,7 +55,7 @@ export function Composer() {
   const [model, setModel] = useState(MODELS[0].id);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Grow with the content up to the CSS max-height, then scroll.
+  // 随内容增高，达到 CSS 最大高度后改为滚动。
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -73,7 +71,7 @@ export function Composer() {
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Enter' || event.shiftKey) return;
-    // Never send while an IME candidate window is open.
+    // IME 候选窗口打开时不得发送。
     if (event.nativeEvent.isComposing) return;
     event.preventDefault();
     submit();

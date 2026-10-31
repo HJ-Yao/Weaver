@@ -17,8 +17,7 @@ vi.mock('@/shared/api/sessions', () => ({
   },
 }));
 
-// The store reads the mode once at module load, so fix the environment before
-// dynamically importing the real-mode singleton.
+// store 在模块加载时只读取一次模式，因此必须先固定环境，再动态导入真实模式单例。
 vi.stubEnv('VITE_USE_MOCK', 'false');
 const { useSessionStore } = await import('./store');
 
@@ -149,4 +148,5 @@ describe('useSessionStore real API mode', () => {
     expect(state.activeSessionId).toBe(createdSession.id);
     expect(state.transcript).toEqual([]);
   });
+
 });

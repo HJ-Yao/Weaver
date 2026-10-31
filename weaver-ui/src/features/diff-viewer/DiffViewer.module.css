@@ -83,9 +83,8 @@
 }
 
 /*
- * Each line is a block, so the newline text nodes between them must not add
- * their own line box — hence `white-space: normal` on the wrapper and
- * `pre-wrap` on the lines themselves.
+ * 每一行都是块级元素，因此行间换行文本节点不能额外生成行盒；
+ * 所以外层使用 `white-space: normal`，行本身使用 `pre-wrap`。
  */
 .line {
   display: block;

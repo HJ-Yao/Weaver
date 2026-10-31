@@ -8,11 +8,11 @@ import {
 import styles from './SettingsPage.module.css';
 
 /**
- * Model connection profiles.
+ * 模型连接配置。
  *
- * Profiles are local state until the settings API exists — see TODO(M2) in
- * `entities/model-config/model.ts`. The API key field is deliberately never
- * stored here: keys belong to the server process, not the browser.
+ * 设置 API 就绪前，配置只保存在本地状态中；见
+ * `entities/model-config/model.ts` 的 TODO(M2)。API Key 字段有意不在此处存储：
+ * 密钥属于服务端进程，不属于浏览器。
  */
 export function ModelSettings() {
   const [configs, setConfigs] = useState<ModelConfig[]>(DEMO_MODEL_CONFIGS);

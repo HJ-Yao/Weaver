@@ -7,7 +7,7 @@
   border-left: 1px solid var(--border);
 }
 
-/* ---------- tabs ---------- */
+/* ---------- 标签页 ---------- */
 
 .tabs {
   display: flex;
@@ -70,7 +70,7 @@
   color: var(--text);
 }
 
-/* ---------- body ---------- */
+/* ---------- 正文 ---------- */
 
 .body {
   flex: 1;
@@ -148,7 +148,7 @@
   background: var(--red);
 }
 
-/* ---------- approvals ---------- */
+/* ---------- 审批 ---------- */
 
 .approvalMini {
   margin-bottom: var(--space-4);
@@ -209,7 +209,7 @@
   color: var(--red);
 }
 
-/* ---------- diff list ---------- */
+/* ---------- diff 列表 ---------- */
 
 .diffFile {
   display: flex;
@@ -251,7 +251,7 @@
   color: var(--red);
 }
 
-/* ---------- replay ---------- */
+/* ---------- 回放 ---------- */
 
 .replayControls {
   display: flex;

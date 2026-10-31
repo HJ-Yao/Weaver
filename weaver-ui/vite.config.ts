@@ -3,11 +3,11 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
 /**
- * Vite + Vitest share this config.
+ * Vite 与 Vitest 共用此配置。
  *
- * - `@/` always resolves to `src/` so imports survive directory moves.
- * - `/api` is proxied to the Spring Boot server during development, which keeps
- *   the browser on a single origin (no CORS setup on the server).
+ * - `@/` 始终解析到 `src/`，目录调整后导入无需跟随修改。
+ * - 开发期间将 `/api` 代理到 Spring Boot 服务端，使浏览器保持同源，
+ *   服务端无需额外配置 CORS。
  */
 export default defineConfig({
   plugins: [react()],
@@ -28,7 +28,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    // CSS Modules must be resolved so component tests can assert on rendered layout hooks.
+    // 必须解析 CSS Modules，组件测试才能断言渲染出的布局标识。
     css: true,
     restoreMocks: true,
   },

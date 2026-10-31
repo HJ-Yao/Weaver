@@ -1,17 +1,17 @@
 /**
- * Workspace diff model.
+ * 工作区 diff 模型。
  *
- * TODO(M2): replace `demoDiffFiles` with a `GET /sessions/{id}/diff` response
- * once the server exposes workspace changes.
+ * TODO(M2): 服务端提供工作区变更后，用 `GET /sessions/{id}/diff` 的响应
+ * 替换 `demoDiffFiles`。
  */
 
-/** One rendered line of a unified diff. */
+/** 统一 diff 中渲染的一行。 */
 export interface DiffLine {
   kind: 'context' | 'add' | 'del';
   text: string;
 }
 
-/** A changed file with its pre-computed unified diff. */
+/** 一个变更文件及其预先计算好的统一 diff。 */
 export interface DiffFile {
   path: string;
   additions: number;
@@ -19,7 +19,7 @@ export interface DiffFile {
   lines: DiffLine[];
 }
 
-/** Demo data used by the context panel until the backend endpoint exists. */
+/** 后端接口就绪前由上下文面板使用的演示数据。 */
 export const demoDiffFiles: DiffFile[] = [
   {
     path: 'core/approval/RuleBasedApprovalPolicy.java',

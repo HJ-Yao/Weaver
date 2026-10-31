@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useUiStore } from '@/app/ui-store';
 import styles from './Toast.module.css';
 
-/** Transient status message. Announced politely, never steals focus. */
+/** 临时状态消息。使用礼貌播报，且从不抢占焦点。 */
 export function Toast() {
   const toast = useUiStore((state) => state.toast);
   const dismiss = useUiStore((state) => state.dismissToast);

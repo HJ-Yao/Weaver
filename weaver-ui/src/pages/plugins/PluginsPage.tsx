@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useUiStore } from '@/app/ui-store';
 import styles from './PluginsPage.module.css';
 
-/** TODO(M2): load from the MCP registry and the skill index. */
+/** TODO(M2): 从 MCP 注册表和技能索引加载。 */
 const PLUGINS = [
   { id: 'agentic-git', name: 'agentic-git', meta: 'stdio · 12 个工具', status: 'ok' },
   { id: 'agentic-shell', name: 'agentic-shell', meta: 'stdio · 8 个工具', status: 'ok' },
@@ -19,11 +19,10 @@ const SKILLS = [
 type Scope = 'public' | 'personal';
 
 /**
- * Plugin / skill catalogue.
+ * 插件与技能目录。
  *
- * The tab comes from the URL (`?tab=mcp|skill`) so the sidebar selection and
- * this page always agree. Scope and search are still client-side; TODO(M2)
- * moves them to the catalogue endpoint.
+ * 标签页由 URL（`?tab=mcp|skill`）决定，因此侧栏选择与此页保持一致。
+ * 范围和搜索仍在前端执行；TODO(M2) 将二者移到目录接口。
  */
 export function PluginsPage() {
   const [params] = useSearchParams();

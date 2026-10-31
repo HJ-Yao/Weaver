@@ -6,11 +6,11 @@ import { ChatHeader } from './ChatHeader';
 import styles from './ChatPage.module.css';
 
 /**
- * Conversation screen.
+ * 对话页面。
  *
- * Three stacked regions: header (auto), transcript (fills, scrolls) and
- * composer (auto). The diff viewer is an overlay inside this section so it
- * covers the conversation but never the rail or the context panel.
+ * 页面由三个纵向区域组成：页头（自动高度）、transcript（填充并滚动）
+ * 和输入区（自动高度）。diff 查看器作为此区域内的浮层，
+ * 只覆盖对话，不遮挡 rail 或上下文面板。
  */
 export function ChatPage() {
   const activeSessionId = useSessionStore((state) => state.activeSessionId);

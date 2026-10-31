@@ -1,27 +1,27 @@
 import { API_BASE, ApiError } from './http';
 
 /**
- * Streaming contract for `POST /sessions/{id}/messages`.
+ * `POST /sessions/{id}/messages` 的流式契约。
  *
- * The endpoint returns `text/event-stream`, but it is a POST — `EventSource`
- * cannot send a body, so the response is consumed with `fetch` + a minimal SSE
- * parser. Event names and payloads mirror `SseStreamSink` / `SseApprovalGate`:
+ * 该接口返回 `text/event-stream`，但请求方法是 POST。`EventSource` 无法发送
+ * 请求体，因此用 `fetch` 加一个最小 SSE 解析器消费响应。
+ * 事件名和载荷与 `SseStreamSink` / `SseApprovalGate` 对应：
  *
- *   delta    -> plain text chunk
+ *   delta    -> 纯文本分片
  *   tool     -> { callId, toolName, argumentsJson }
  *   approval -> { callId, toolName, argumentsJson, reversibility, timeoutSeconds }
  *   done     -> "STOP" | "LENGTH" | "ERROR"
- *   error    -> plain text
+ *   error    -> 纯文本
  */
 
-/** A tool invocation announced by the model. */
+/** 模型发起的工具调用。 */
 export interface StreamToolCall {
   callId: string;
   toolName: string;
   argumentsJson: string;
 }
 
-/** A pending approval; answer it through `sessionApi.resolveApproval`. */
+/** 待处理的审批；通过 `sessionApi.resolveApproval` 响应。 */
 export interface StreamApproval {
   callId: string;
   toolName: string;
@@ -30,10 +30,10 @@ export interface StreamApproval {
   timeoutSeconds: number;
 }
 
-/** Reason the model stream ended. */
+/** 模型流结束的原因。 */
 export type StopReason = 'STOP' | 'LENGTH' | 'ERROR';
 
-/** Callbacks invoked while the stream is open. All are optional. */
+/** 流打开期间调用的回调，均为可选。 */
 export interface StreamHandlers {
   onDelta?: (delta: string) => void;
   onTool?: (call: StreamToolCall) => void;
@@ -43,10 +43,10 @@ export interface StreamHandlers {
 }
 
 /**
- * Send a user message and consume the run's SSE stream.
+ * 发送用户消息并消费本次运行的 SSE 流。
  *
- * Resolves when the server closes the response. Aborting via `signal` is a
- * normal end (the user pressed Stop), so it does not call `onError`.
+ * 服务端关闭响应后完成。通过 `signal` 中止属于正常结束（用户点击停止），
+ * 因此不会调用 `onError`。
  */
 export async function streamMessage(
   sessionId: string,
@@ -76,7 +76,7 @@ export async function streamMessage(
       const { value, done } = await reader.read();
       if (done) break;
 
-      // Spring writes bare `\n`; normalising keeps the frame delimiter simple.
+      // Spring 使用裸 `\n`；统一后可以简化帧分隔逻辑。
       buffer += value.replace(/\r\n/g, '\n');
       let boundary = buffer.indexOf('\n\n');
       while (boundary !== -1) {
@@ -115,12 +115,12 @@ function dispatchFrame(frame: string, handlers: StreamHandlers): void {
       handlers.onError?.(parsed.data);
       break;
     default:
-      // Unknown events are ignored so the server can add new ones safely.
+      // 忽略未知事件，使服务端可以安全地增加新事件。
       break;
   }
 }
 
-/** Split one SSE frame into its `event:` name and joined `data:` payload. */
+/** 将单个 SSE 帧拆分为 `event:` 名称和合并后的 `data:` 载荷。 */
 function parseFrame(frame: string): { event: string; data: string } | null {
   let event = 'message';
   const data: string[] = [];

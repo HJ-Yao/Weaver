@@ -3,16 +3,15 @@ import { SessionList } from './SessionList';
 import styles from './Sidebar.module.css';
 
 interface SidebarProps {
-  /** Which secondary panel to show; settings has no sidebar. */
+  /** 要显示的次级面板；设置页没有侧栏。 */
   route: 'chat' | 'plugins' | 'settings';
 }
 
 /**
- * Second column: either the conversation list or the plugin navigation.
+ * 第二列：显示会话列表或插件导航。
  *
- * The two panels are separate components because they have different data
- * sources and different empty states; the sidebar only decides which one the
- * current route shows.
+ * 两个面板的数据源和空状态不同，因此拆成独立组件；
+ * 侧栏只决定当前路由显示哪一个。
  */
 export function Sidebar({ route }: SidebarProps) {
   if (route === 'settings') return null;

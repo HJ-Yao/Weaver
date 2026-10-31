@@ -6,11 +6,10 @@ import { ToolCard } from '@/features/tool-call/ToolCard';
 import styles from './MessageStream.module.css';
 
 /**
- * Renders the transcript in order.
+ * 按顺序渲染 transcript。
  *
- * The list owns scrolling: after any change it pins to the bottom, which is the
- * expected behaviour while a run streams. TODO(M2): stop pinning when the user
- * scrolls up to read history.
+ * 列表负责滚动：内容变化后固定到底部，这是流式运行期间预期的行为。
+ * TODO(M2): 用户向上滚动查看历史时停止固定在底部。
  */
 export function MessageStream() {
   const transcript = useSessionStore((state) => state.transcript);

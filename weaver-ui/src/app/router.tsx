@@ -5,13 +5,13 @@ import { SettingsPage } from '@/pages/settings/SettingsPage';
 import { AppShell } from './AppShell';
 
 /**
- * Route table.
+ * 路由表。
  *
- * Exported separately from the browser router so tests can mount the same tree
- * with `createMemoryRouter` (see `App.test.tsx`).
+ * 与浏览器路由分开导出，测试才能用 `createMemoryRouter` 挂载同一棵路由树
+ * （见 `App.test.tsx`）。
  *
- * TODO(M4): switch to a hash/memory router when packaging with Tauri, where the
- * custom protocol cannot serve deep links without a fallback.
+ * TODO(M4): 使用 Tauri 打包后切换为 hash 或 memory 路由；
+ * 自定义协议在没有回退页时无法提供深链接。
  */
 export const routes: RouteObject[] = [
   {

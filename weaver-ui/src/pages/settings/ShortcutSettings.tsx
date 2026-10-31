@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import styles from './SettingsPage.module.css';
 
-/** One rebindable command. */
+/** 一个可重新绑定快捷键的命令。 */
 interface Shortcut {
   id: string;
   group: string;
@@ -11,7 +11,7 @@ interface Shortcut {
 
 const STORAGE_KEY = 'weaver.shortcuts';
 
-/** Defaults; the user's overrides are merged on top when the page mounts. */
+/** 默认绑定；页面挂载时会在其上合并用户覆盖项。 */
 const DEFAULT_SHORTCUTS: Shortcut[] = [
   { id: 'open-settings', group: '全局', label: '打开设置', keys: ['Ctrl', ','] },
   { id: 'toggle-sidebar', group: '全局', label: '收起 / 展开侧栏', keys: ['Ctrl', 'B'] },
@@ -32,7 +32,7 @@ const DEFAULT_SHORTCUTS: Shortcut[] = [
   { id: 'replay-exit', group: '回放', label: '退出回放', keys: ['Esc'] },
 ];
 
-/** Merge stored overrides without letting a corrupt value break the page. */
+/** 合并已存储的覆盖项，同时避免损坏值导致页面失效。 */
 function loadShortcuts(): Shortcut[] {
   let stored: Record<string, string[]> = {};
   try {
@@ -52,16 +52,16 @@ function persist(shortcuts: Shortcut[]): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
   } catch {
-    // Preferences simply do not persist in private mode.
+    // 隐私模式下偏好设置不会持久化。
   }
 }
 
 /**
- * Keyboard shortcut editor.
+ * 键盘快捷键编辑器。
  *
- * Click a row to record: the next non-modifier key becomes the binding. Escape
- * cancels and restores the previous value, so no binding can be lost by accident.
- * TODO(M4): bind these to real commands; today they are presentation only.
+ * 点击一行即可录制：下一个非修饰键成为绑定。按 Escape 取消并恢复原值，
+ * 避免误操作丢失绑定。
+ * TODO(M4): 将这些快捷键绑定到真实命令；目前仅用于展示。
  */
 export function ShortcutSettings() {
   const [shortcuts, setShortcuts] = useState<Shortcut[]>(loadShortcuts);

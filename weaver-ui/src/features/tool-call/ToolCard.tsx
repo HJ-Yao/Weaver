@@ -10,11 +10,10 @@ const STATUS_LABEL: Record<ToolStatus, string> = {
 };
 
 /**
- * Inline tool invocation.
+ * 内联工具调用。
  *
- * The whole header is the toggle: it is a real `<button>` with
- * `aria-expanded`, so keyboard and screen-reader users get the same behaviour
- * as a click.
+ * 整个头部都是切换控件：使用真实 `<button>` 并带有 `aria-expanded`，
+ * 键盘用户和屏幕阅读器用户可获得与点击一致的行为。
  */
 export function ToolCard({ item }: { item: ToolCallItem }) {
   const toggleExpanded = useSessionStore((state) => state.toggleToolExpanded);

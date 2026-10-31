@@ -6,7 +6,7 @@ interface RailItem {
   to: string;
   label: string;
   icon: IconName;
-  /** `end` keeps `/` from matching every route. */
+  /** `end` 可避免 `/` 匹配所有路由。 */
   end?: boolean;
 }
 
@@ -16,11 +16,10 @@ const PRIMARY: RailItem[] = [
 ];
 
 /**
- * Leftmost icon rail.
+ * 最左侧图标 rail。
  *
- * Only one destination is highlighted at a time because `NavLink` owns the
- * active state — no manual toggling, so the rail can never disagree with the
- * current route.
+ * 同一时间只高亮一个目标，因为激活状态由 `NavLink` 管理；
+ * 无需手动切换，因此 rail 不会与当前路由不一致。
  */
 export function Rail() {
   return (

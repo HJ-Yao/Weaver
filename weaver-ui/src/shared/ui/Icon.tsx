@@ -1,11 +1,10 @@
 import type { ReactNode, SVGProps } from 'react';
 
 /**
- * Inline SVG icon set.
+ * 内联 SVG 图标集。
  *
- * Icons are inlined instead of pulling an icon package: the set is small, and
- * `currentColor` keeps them themed by the surrounding text token. Add a new
- * entry to `ICONS` rather than importing a one-off SVG in a component.
+ * 图标集较小，因此采用内联方式而非引入图标包；`currentColor` 使其颜色
+ * 跟随周围文本 token。新增图标应加入 `ICONS`，不要在组件中单独导入 SVG。
  */
 
 const ICONS = {
@@ -69,16 +68,16 @@ const ICONS = {
   ),
 } satisfies Record<string, ReactNode>;
 
-/** Every icon available to the app. */
+/** 应用可用的全部图标。 */
 export type IconName = keyof typeof ICONS;
 
 interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
   name: IconName;
-  /** Square size in pixels; the viewBox scales to fit. */
+  /** 方形尺寸，单位为像素；`viewBox` 会缩放以适配。 */
   size?: number;
 }
 
-/** Decorative icon; labels always come from the surrounding control. */
+/** 装饰性图标；标签始终由周围控件提供。 */
 export function Icon({ name, size = 18, ...rest }: IconProps) {
   return (
     <svg

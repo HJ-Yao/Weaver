@@ -5,41 +5,41 @@ import { transcriptFromSnapshot } from './model';
 import type { ApprovalItem, MessageItem, SessionSummary, ToolCallItem, TranscriptItem } from './model';
 
 /**
- * Session state.
+ * 会话状态。
  *
- * One store owns "the open conversation": metadata, the visible transcript and
- * the running flag. Keeping it here (instead of in the page component) lets the
- * sidebar, context panel and composer read the same facts without prop drilling.
+ * 一个 store 统一持有“当前打开的会话”：元数据、可见的 `transcript` 和运行标志。
+ * 将它放在这里而不是页面组件中，侧栏、上下文面板和输入区就能读取同一份事实，
+ * 无需逐层传递 props。
  */
 
-/** When `false`, the store streams from the Spring Boot server instead of mocking. */
+/** 为 `false` 时从 Spring Boot 服务端流式读取，否则使用模拟数据。 */
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
 
-/** Canned reply used until the live stream is the default. */
+/** 在真实流式调用成为默认路径前使用的固定回复。 */
 const MOCK_REPLY = '收到。我会先读取相关文件，再给出改动方案；涉及写操作时会在这里请求审批。';
 
-/** Lifecycle state shared by the session list and the open conversation. */
+/** 会话列表与当前会话共享的生命周期状态。 */
 type SessionStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 interface SessionState {
-  /** Sessions shown in the sidebar. */
+  /** 侧栏中显示的会话。 */
   sessions: SessionSummary[];
-  /** Currently open session, or `null` before anything is selected. */
+  /** 当前打开的会话；尚未选择时为 `null`。 */
   activeSessionId: string | null;
-  /** Visible conversation, in render order. */
+  /** 按渲染顺序排列的可见对话。 */
   transcript: TranscriptItem[];
-  /** True while a run is in flight; the composer stays disabled. */
+  /** 运行期间为 `true`，此时输入区保持禁用。 */
   running: boolean;
-  /** Current list/detail loading state. */
+  /** 会话列表或详情当前的加载状态。 */
   status: SessionStatus;
-  /** User-facing message for the most recent session request failure. */
+  /** 最近一次会话请求失败时展示给用户的消息。 */
   error: string | null;
 
-  /** Load the session list once, or retry it when `force` is true. */
+  /** 加载一次会话列表；`force` 为 `true` 时强制重试。 */
   loadSessions: (force?: boolean) => Promise<void>;
-  /** Open a session and, in real mode, load its replayable snapshot. */
+  /** 打开会话；真实模式下同时加载可回放的快照。 */
   selectSession: (id: string) => Promise<void>;
-  /** Create a new session and make it active. */
+  /** 创建新会话并将其设为当前会话。 */
   createSession: (title?: string) => Promise<void>;
   sendMessage: (content: string) => void;
   resolveApproval: (callId: string, approved: boolean) => void;
@@ -49,11 +49,10 @@ interface SessionState {
 let idCounter = 0;
 const nextId = (prefix: string) => `${prefix}-${++idCounter}`;
 
-// Detail responses can arrive out of order after rapid sidebar clicks. Only the
-// latest request is allowed to write the transcript or error state.
+// 快速切换侧栏会话时，详情响应可能乱序返回；只允许最新请求写入 transcript 或错误状态。
 let detailRequestId = 0;
 
-/** Demo metadata used when the UI runs without the server. */
+/** 未连接服务端时使用的演示元数据。 */
 const demoSessions: SessionSummary[] = [
   {
     id: 'demo-approval',
@@ -72,7 +71,7 @@ const demoSessions: SessionSummary[] = [
   { id: 'demo-symlink', title: '符号链接逃逸', createdAt: '2026-10-30T10:02:00Z', stepCount: 15 },
 ];
 
-/** Demo transcript; mirrors the approved preview so the shell can be reviewed end to end. */
+/** 演示用 transcript，与已确认的预览一致，便于端到端检查外壳。 */
 const demoTranscript: TranscriptItem[] = [
   {
     kind: 'message',
@@ -126,232 +125,227 @@ const demoTranscript: TranscriptItem[] = [
   },
 ];
 
-export const useSessionStore = create<SessionState>()((set, get) => ({
-  sessions: USE_MOCK ? demoSessions : [],
-  activeSessionId: USE_MOCK ? (demoSessions[0]?.id ?? null) : null,
-  transcript: USE_MOCK ? demoTranscript : [],
-  running: false,
-  status: USE_MOCK ? 'ready' : 'idle',
-  error: null,
+export const useSessionStore = create<SessionState>()((set, get) => {
+  const updateItem = (id: string, update: (item: TranscriptItem) => TranscriptItem) => {
+    set((state) => ({
+      transcript: state.transcript.map((item) => (item.id === id ? update(item) : item)),
+    }));
+  };
 
-  loadSessions: async (force = false) => {
-    if (!force && get().status !== 'idle') return;
+  return {
+    sessions: USE_MOCK ? demoSessions : [],
+    activeSessionId: USE_MOCK ? (demoSessions[0]?.id ?? null) : null,
+    transcript: USE_MOCK ? demoTranscript : [],
+    running: false,
+    status: USE_MOCK ? 'ready' : 'idle',
+    error: null,
 
-    if (USE_MOCK) {
-      set({ status: 'ready', error: null });
-      return;
-    }
+    loadSessions: async (force = false) => {
+      if (!force && get().status !== 'idle') return;
 
-    set({ status: 'loading', error: null });
-    try {
-      const sessions = await sessionApi.list();
-      set({ sessions });
-
-      const firstSession = sessions[0];
-      if (!get().activeSessionId && firstSession) {
-        await get().selectSession(firstSession.id);
+      if (USE_MOCK) {
+        set({ status: 'ready', error: null });
         return;
       }
 
-      set({ status: 'ready', error: null });
-    } catch (error) {
-      set({
-        status: 'error',
-        error: `会话列表加载失败：${readableError(error)}`,
-      });
-    }
-  },
+      set({ status: 'loading', error: null });
+      try {
+        const sessions = await sessionApi.list();
+        set({ sessions });
 
-  selectSession: async (id) => {
-    if (USE_MOCK) {
-      set({ activeSessionId: id });
-      return;
-    }
+        const firstSession = sessions[0];
+        if (!get().activeSessionId && firstSession) {
+          await get().selectSession(firstSession.id);
+          return;
+        }
 
-    const requestId = ++detailRequestId;
-    set({ activeSessionId: id, error: null });
+        set({ status: 'ready', error: null });
+      } catch (error) {
+        set({
+          status: 'error',
+          error: `会话列表加载失败：${readableError(error)}`,
+        });
+      }
+    },
 
-    try {
-      const detail = await sessionApi.detail(id);
-      if (requestId !== detailRequestId) return;
+    selectSession: async (id) => {
+      if (USE_MOCK) {
+        set({ activeSessionId: id });
+        return;
+      }
 
-      set({
-        transcript: transcriptFromSnapshot(detail.snapshot),
-        status: 'ready',
-        error: null,
-      });
-    } catch (error) {
-      if (requestId !== detailRequestId) return;
+      const requestId = ++detailRequestId;
+      set({ activeSessionId: id, error: null });
 
-      // Keep the currently visible transcript; the next successful selection
-      // replaces it once the server is reachable again.
-      set({
-        status: 'error',
-        error: `会话详情加载失败：${readableError(error)}`,
-      });
-    }
-  },
+      try {
+        const detail = await sessionApi.detail(id);
+        if (requestId !== detailRequestId) return;
 
-  createSession: async (title = '新会话') => {
-    if (USE_MOCK) {
-      const session: SessionSummary = {
-        id: `${Date.now()}`,
-        title,
-        createdAt: new Date().toISOString(),
+        set({
+          transcript: transcriptFromSnapshot(detail.snapshot),
+          status: 'ready',
+          error: null,
+        });
+      } catch (error) {
+        if (requestId !== detailRequestId) return;
+
+        // 保留当前可见的 transcript；服务端恢复后，下一次成功选择会将其替换。
+        set({
+          status: 'error',
+          error: `会话详情加载失败：${readableError(error)}`,
+        });
+      }
+    },
+
+    createSession: async (title = '新会话') => {
+      if (USE_MOCK) {
+        const session: SessionSummary = {
+          id: `${Date.now()}`,
+          title,
+          createdAt: new Date().toISOString(),
+        };
+        set((state) => ({
+          sessions: [...state.sessions, session],
+          activeSessionId: session.id,
+          transcript: [],
+          status: 'ready',
+          error: null,
+        }));
+        return;
+      }
+
+      try {
+        const session = await sessionApi.create(title);
+        // 新会话本身就是空的，因此要使仍在进行的详情请求失效，避免旧会话覆盖它。
+        detailRequestId += 1;
+        set((state) => ({
+          sessions: [...state.sessions, session],
+          activeSessionId: session.id,
+          transcript: [],
+          status: 'ready',
+          error: null,
+        }));
+      } catch (error) {
+        set({
+          status: 'error',
+          error: `新建会话失败：${readableError(error)}`,
+        });
+      }
+    },
+
+    sendMessage: (content) => {
+      const text = content.trim();
+      if (!text || get().running) return;
+
+      const user: MessageItem = {
+        kind: 'message',
+        id: nextId('message'),
+        role: 'user',
+        content: text,
       };
-      set((state) => ({
-        sessions: [...state.sessions, session],
-        activeSessionId: session.id,
-        transcript: [],
-        status: 'ready',
-        error: null,
-      }));
-      return;
-    }
+      const reply: MessageItem = {
+        kind: 'message',
+        id: nextId('message'),
+        role: 'assistant',
+        content: '',
+        streaming: true,
+      };
 
-    try {
-      const session = await sessionApi.create(title);
-      // A created session is already empty, so invalidate any in-flight detail
-      // request instead of loading the previous session over this one.
-      detailRequestId += 1;
-      set((state) => ({
-        sessions: [...state.sessions, session],
-        activeSessionId: session.id,
-        transcript: [],
-        status: 'ready',
-        error: null,
-      }));
-    } catch (error) {
-      set({
-        status: 'error',
-        error: `新建会话失败：${readableError(error)}`,
-      });
-    }
-  },
+      set((state) => ({ transcript: [...state.transcript, user, reply], running: true }));
 
-  sendMessage: (content) => {
-    const text = content.trim();
-    if (!text || get().running) return;
+      if (USE_MOCK) {
+        // 模拟响应同步完成，测试不依赖定时器。
+        // TODO(M2): 服务端始终可用后移除模拟分支。
+        updateItem(reply.id, (item) =>
+          item.kind === 'message' ? { ...item, content: MOCK_REPLY, streaming: false } : item,
+        );
+        set({ running: false });
+        return;
+      }
 
-    const user: MessageItem = {
-      kind: 'message',
-      id: nextId('message'),
-      role: 'user',
-      content: text,
-    };
-    const reply: MessageItem = {
-      kind: 'message',
-      id: nextId('message'),
-      role: 'assistant',
-      content: '',
-      streaming: true,
-    };
+      const sessionId = get().activeSessionId;
+      if (!sessionId) {
+        set({ running: false });
+        return;
+      }
 
-    set((state) => ({ transcript: [...state.transcript, user, reply], running: true }));
-
-    if (USE_MOCK) {
-      // The mock resolves synchronously so tests never depend on timers.
-      // TODO(M2): drop the mock branch once the server is always running.
-      patchItem(set, reply.id, (item) =>
-        item.kind === 'message' ? { ...item, content: MOCK_REPLY, streaming: false } : item,
-      );
-      set({ running: false });
-      return;
-    }
-
-    const sessionId = get().activeSessionId;
-    if (!sessionId) {
-      set({ running: false });
-      return;
-    }
-
-    void streamMessage(sessionId, text, {
-      onDelta: (delta) =>
-        patchItem(set, reply.id, (item) =>
-          item.kind === 'message' ? { ...item, content: item.content + delta } : item,
-        ),
-      onTool: (call) => {
-        const tool: ToolCallItem = {
-          kind: 'tool',
-          id: call.callId,
-          toolName: call.toolName,
-          argumentsJson: call.argumentsJson,
-          status: 'running',
-          expanded: false,
-        };
-        set((state) => ({ transcript: [...state.transcript, tool] }));
-      },
-      onApproval: (approval) => {
-        const approvalItem: ApprovalItem = {
-          kind: 'approval',
-          id: approval.callId,
-          toolName: approval.toolName,
-          argumentsJson: approval.argumentsJson,
-          reversibility: approval.reversibility,
-          timeoutSeconds: approval.timeoutSeconds,
-          status: 'pending',
-        };
-        set((state) => ({ transcript: [...state.transcript, approvalItem] }));
-      },
-      onDone: () => {
-        patchItem(set, reply.id, (item) =>
+      void streamMessage(sessionId, text, {
+        onDelta: (delta) =>
+          updateItem(reply.id, (item) =>
+            item.kind === 'message' ? { ...item, content: item.content + delta } : item,
+          ),
+        onTool: (call) => {
+          const tool: ToolCallItem = {
+            kind: 'tool',
+            id: call.callId,
+            toolName: call.toolName,
+            argumentsJson: call.argumentsJson,
+            status: 'running',
+            expanded: false,
+          };
+          set((state) => ({ transcript: [...state.transcript, tool] }));
+        },
+        onApproval: (approval) => {
+          const approvalItem: ApprovalItem = {
+            kind: 'approval',
+            id: approval.callId,
+            toolName: approval.toolName,
+            argumentsJson: approval.argumentsJson,
+            reversibility: approval.reversibility,
+            timeoutSeconds: approval.timeoutSeconds,
+            status: 'pending',
+          };
+          set((state) => ({ transcript: [...state.transcript, approvalItem] }));
+        },
+        onDone: () => {
+          updateItem(reply.id, (item) =>
+            item.kind === 'message' ? { ...item, streaming: false } : item,
+          );
+          set({ running: false });
+        },
+        onError: (message) => {
+          updateItem(reply.id, (item) =>
+            item.kind === 'message'
+              ? { ...item, content: `运行失败：${message}`, streaming: false }
+              : item,
+          );
+          set({ running: false });
+        },
+      }).catch(() => {
+        updateItem(reply.id, (item) =>
           item.kind === 'message' ? { ...item, streaming: false } : item,
         );
         set({ running: false });
-      },
-      onError: (message) => {
-        patchItem(set, reply.id, (item) =>
-          item.kind === 'message'
-            ? { ...item, content: `运行失败：${message}`, streaming: false }
+      });
+    },
+
+    resolveApproval: (callId, approved) => {
+      set((state) => ({
+        transcript: state.transcript.map((item) =>
+          item.kind === 'approval' && item.id === callId
+            ? { ...item, status: approved ? 'approved' : 'rejected' }
             : item,
-        );
-        set({ running: false });
-      },
-    }).catch(() => {
-      patchItem(set, reply.id, (item) =>
-        item.kind === 'message' ? { ...item, streaming: false } : item,
-      );
-      set({ running: false });
-    });
-  },
+        ),
+      }));
 
-  resolveApproval: (callId, approved) => {
-    set((state) => ({
-      transcript: state.transcript.map((item) =>
-        item.kind === 'approval' && item.id === callId
-          ? { ...item, status: approved ? 'approved' : 'rejected' }
-          : item,
-      ),
-    }));
+      const sessionId = get().activeSessionId;
+      if (!USE_MOCK && sessionId) {
+        // 被阻塞的运行正在等待这次 HTTP 调用；若失败，服务端会将其表现为超时。
+        void sessionApi.resolveApproval(sessionId, callId, approved).catch(() => undefined);
+      }
+    },
 
-    const sessionId = get().activeSessionId;
-    if (!USE_MOCK && sessionId) {
-      // The blocked run is waiting on this HTTP call; failures surface as a timeout on the server.
-      void sessionApi.resolveApproval(sessionId, callId, approved).catch(() => undefined);
-    }
-  },
+    toggleToolExpanded: (callId) => {
+      set((state) => ({
+        transcript: state.transcript.map((item) =>
+          item.kind === 'tool' && item.id === callId ? { ...item, expanded: !item.expanded } : item,
+        ),
+      }));
+    },
+  };
+});
 
-  toggleToolExpanded: (callId) => {
-    set((state) => ({
-      transcript: state.transcript.map((item) =>
-        item.kind === 'tool' && item.id === callId ? { ...item, expanded: !item.expanded } : item,
-      ),
-    }));
-  },
-}));
-
-/** Replace one transcript item in place, keeping array identity stable otherwise. */
-function patchItem(
-  set: (fn: (state: SessionState) => Partial<SessionState>) => void,
-  id: string,
-  update: (item: TranscriptItem) => TranscriptItem,
-): void {
-  set((state) => ({
-    transcript: state.transcript.map((item) => (item.id === id ? update(item) : item)),
-  }));
-}
-
-/** Convert an unknown request failure into text suitable for the UI. */
+/** 将未知的请求失败转换为适合界面展示的文本。 */
 function readableError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
   return message || '未知错误';

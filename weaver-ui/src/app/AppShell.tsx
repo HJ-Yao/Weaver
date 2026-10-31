@@ -8,7 +8,7 @@ import { StatusBar } from './StatusBar';
 import { useUiStore } from './ui-store';
 import styles from './AppShell.module.css';
 
-/** The three top-level screens; the shell layout differs for each. */
+/** 三个顶层页面；每个页面的外壳布局各不相同。 */
 type RouteKind = 'chat' | 'plugins' | 'settings';
 
 function useRouteKind(): RouteKind {
@@ -19,11 +19,10 @@ function useRouteKind(): RouteKind {
 }
 
 /**
- * Application frame.
+ * 应用外壳。
  *
- * Owns the four-column grid (rail · sidebar · main · context), the top bar and
- * the status bar. Pages render into `<Outlet />` and never position themselves
- * against the viewport.
+ * 负责四列 grid（rail、sidebar、main、context）、顶栏和状态栏。
+ * 页面渲染到 `<Outlet />` 中，自身不相对视口定位。
  */
 export function AppShell() {
   const route = useRouteKind();

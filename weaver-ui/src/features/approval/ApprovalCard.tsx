@@ -9,10 +9,9 @@ const STATUS_LABEL = {
 } as const;
 
 /**
- * Approval request raised by a blocked tool call.
+ * 被阻塞的工具调用发起的审批请求。
  *
- * The card stays in the transcript after a decision so the conversation keeps
- * an audit trail; only the actions are disabled.
+ * 完成决策后卡片仍保留在 transcript 中，以维持对话的审计轨迹；只禁用操作按钮。
  */
 export function ApprovalCard({ item }: { item: ApprovalItem }) {
   const resolveApproval = useSessionStore((state) => state.resolveApproval);

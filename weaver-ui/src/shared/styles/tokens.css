@@ -1,18 +1,17 @@
 /*
- * Design tokens — the single source of colour, spacing, radius and type.
+ * 设计 token：颜色、间距、圆角和字体的唯一来源。
  *
- * Rules (see CONVENTIONS.md §5):
- *   1. Components read tokens, never raw hex values.
- *   2. Every accent preset redefines the ground *and* the accent ink so the
- *      chrome stays coherent; light mode keeps the ground neutral and only
- *      darkens the ink.
- *   3. New tokens must describe a role (`--panel`), not a look (`--dark-purple`).
+ * 规则（见 CONVENTIONS.md §5）：
+ *   1. 组件只读取 token，绝不使用裸十六进制值。
+ *   2. 每个强调色预设同时重定义底色和强调文字色，使整体界面保持协调；
+ *      亮色模式保持中性底色，只加深文字色。
+ *   3. 新 token 必须描述用途（`--panel`），而不是外观（`--dark-purple`）。
  */
 
 :root {
   color-scheme: dark;
 
-  /* Surfaces */
+  /* 表面 */
   --bg: #120a1c;
   --panel: #180f26;
   --panel-2: #1e1430;
@@ -20,27 +19,27 @@
   --border: #2c1e42;
   --border-strong: #3b2857;
 
-  /* Text */
+  /* 文本 */
   --text: #ede7f6;
   --muted: #9b8fb2;
   --faint: #6f6387;
 
-  /* Accent */
+  /* 强调色 */
   --accent: #a66cff;
   --accent-2: #7c3aed;
   --accent-soft: rgba(166, 108, 255, 0.12);
 
-  /* Semantic status */
+  /* 语义状态 */
   --gold: #e8b45a;
   --green: #5fd3a0;
   --red: #e0667a;
   --diff-add: rgba(95, 211, 160, 0.12);
   --diff-del: rgba(224, 102, 122, 0.12);
 
-  /* Elevation */
+  /* 层次阴影 */
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
 
-  /* Spacing scale: 4px steps. Use these instead of arbitrary pixel values. */
+  /* 间距刻度：以 4px 递增；使用这些值，避免任意像素值。 */
   --space-1: 4px;
   --space-2: 6px;
   --space-3: 8px;
@@ -50,23 +49,23 @@
   --space-7: 28px;
   --space-8: 40px;
 
-  /* Radii */
+  /* 圆角 */
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
   --radius-pill: 999px;
 
-  /* Type */
+  /* 字体 */
   --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, 'SFMono-Regular', monospace;
   --font-sans: 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
 
-  /* Layering */
+  /* 层级 */
   --z-dropdown: 30;
   --z-overlay: 40;
   --z-toast: 60;
 }
 
-/* ---------- accent presets (dark ground) ---------- */
+/* ---------- 强调色预设（深色底） ---------- */
 
 :root[data-accent='violet'] {
   --accent: #a66cff;
@@ -164,9 +163,9 @@
   --border-strong: #3d434e;
 }
 
-/* ---------- light theme ---------- */
+/* ---------- 亮色主题 ---------- */
 
-/* The ground goes neutral; each accent keeps a darker ink so the choice still shows. */
+/* 底色转为中性色；各强调色使用更深的文字色，仍能体现所选强调色。 */
 :root[data-theme='light'] {
   color-scheme: light;
   --bg: #f6f2fb;

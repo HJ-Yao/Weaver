@@ -1,8 +1,8 @@
 /*
- * Global reset and element defaults.
+ * 全局重置与元素默认样式。
  *
- * Only element-level rules belong here. Anything component-specific lives in a
- * co-located `*.module.css` so class names cannot leak across the app.
+ * 这里只放元素级规则。组件专属样式放在同目录的 `*.module.css` 中，
+ * 避免类名泄漏到应用其他部分。
  */
 
 * {
@@ -38,13 +38,13 @@ button {
   background: none;
 }
 
-/* Keyboard users get a visible ring; mouse users do not. */
+/* 键盘用户看到可见焦点环，鼠标用户不显示。 */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-/* Thin, theme-aware scrollbars in both engines. */
+/* 两种浏览器引擎都使用细窄且跟随主题的滚动条。 */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
