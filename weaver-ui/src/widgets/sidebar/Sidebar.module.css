@@ -1,0 +1,232 @@
+/*
+ * Sidebar chrome shared by the session list and the plugin navigation.
+ * Both panels live in this widget folder, so they share one style module.
+ */
+
+.sidebar {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px var(--space-4) 0;
+}
+
+.label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+}
+
+.head {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.newSession {
+  height: 34px;
+  border: 1px solid var(--accent-2);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.newSession:hover {
+  border-color: var(--accent);
+}
+
+.search {
+  height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.search::placeholder {
+  color: var(--faint);
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.empty {
+  margin: var(--space-5) var(--space-3);
+  color: var(--faint);
+  font-size: 12px;
+}
+
+/* ---------- sessions ---------- */
+
+.session {
+  position: relative;
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  text-align: left;
+}
+
+.session:hover {
+  background: var(--panel-2);
+}
+
+.sessionActive {
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+
+.sessionActive::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.sessionTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.sessionMeta {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.sessionDot {
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* ---------- plugin navigation ---------- */
+
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-1) var(--space-3) 10px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.navItem:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.navItemActive {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: var(--space-1) 0 var(--space-3);
+  padding: 0 var(--space-4);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: var(--space-2);
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-2);
+}
+
+.item:hover {
+  border-color: var(--border-strong);
+}
+
+.itemName {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.itemMeta {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* ---------- shared bits ---------- */
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px var(--space-4);
+  border-top: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.ok {
+  background: var(--green);
+}
+
+.running {
+  background: var(--gold);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.tiny {
+  font-size: 11px;
+  color: var(--faint);
+}

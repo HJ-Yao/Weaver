@@ -1,0 +1,68 @@
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px var(--space-6) 10px;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  max-width: 760px;
+}
+
+.user {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.assistant {
+  align-self: flex-start;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: 5px;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.seq {
+  font-family: var(--font-mono);
+}
+
+.bubble {
+  padding: 10px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.user .bubble {
+  background: var(--accent-soft);
+  border-color: var(--border-strong);
+}
+
+.assistant .bubble {
+  background: var(--panel-2);
+}
+
+/* A streaming bubble stays visually identical; the caret marks progress. */
+.streaming::after {
+  content: '▍';
+  margin-left: 2px;
+  color: var(--accent);
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}

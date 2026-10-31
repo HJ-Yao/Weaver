@@ -1,0 +1,138 @@
+/*
+ * Shell layout.
+ *
+ * Column widths are CSS variables so a route or a collapse toggle only changes
+ * one custom property; the grid template stays declared once.
+ */
+
+.app {
+  display: grid;
+  grid-template-rows: 56px minmax(0, 1fr) 32px;
+  height: 100%;
+}
+
+/* ---------- top bar ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  /* 8.5px + the 38px button centres it on the rail's 55px content box below. */
+  padding: 0 var(--space-5) 0 8.5px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.toggle {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  border-radius: var(--radius-md);
+  color: var(--muted);
+}
+
+.toggle:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.brandMark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
+.brandText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.brandText strong {
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+
+.brandText span {
+  font-size: 10.5px;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+/* ---------- four-column shell ---------- */
+
+.shell {
+  --sidebar-width: 270px;
+  --context-width: 380px;
+
+  display: grid;
+  grid-template-columns:
+    56px
+    var(--sidebar-width)
+    minmax(0, 1fr)
+    var(--context-width);
+  min-height: 0;
+}
+
+.shell[data-route='plugins'] {
+  --sidebar-width: 300px;
+  --context-width: 0px;
+}
+
+/* Settings is a full-width page: the rail stays, the other columns collapse. */
+.shell[data-route='settings'] {
+  --sidebar-width: 0px;
+  --context-width: 0px;
+}
+
+.shell[data-left='true'] {
+  --sidebar-width: 0px;
+}
+
+.shell[data-right='true'] {
+  --context-width: 0px;
+}
+
+.shell[data-route='settings'] .main {
+  grid-column: 2 / -1;
+}
+
+.main {
+  grid-column: 3;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 1180px) {
+  .shell {
+    --sidebar-width: 240px;
+    --context-width: 310px;
+  }
+}
+
+@media (max-width: 980px) {
+  .shell {
+    --sidebar-width: 220px;
+    --context-width: 0px;
+  }
+
+  /* TODO(M4): replace the hidden context panel with a drawer at this width. */
+}

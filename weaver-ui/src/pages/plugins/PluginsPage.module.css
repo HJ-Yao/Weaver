@@ -1,0 +1,139 @@
+.page {
+  min-height: 0;
+  height: 100%;
+  padding: var(--space-6) var(--space-7);
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  margin-bottom: 18px;
+}
+
+.title {
+  margin: 0 0 var(--space-1);
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.addButton {
+  height: 34px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--accent-2);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.addButton:hover {
+  border-color: var(--accent);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-2);
+}
+
+.seg {
+  height: 26px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.segActive {
+  background: var(--panel);
+  color: var(--text);
+}
+
+.search {
+  width: 220px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.search::placeholder {
+  color: var(--faint);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  align-content: start;
+  margin-top: var(--space-4);
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-2);
+}
+
+.card:hover {
+  border-color: var(--border-strong);
+}
+
+.name {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.meta {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.ok {
+  background: var(--green);
+}
+
+.running {
+  background: var(--gold);
+}
+
+.empty {
+  grid-column: 1 / -1;
+  margin: var(--space-5) 0;
+  color: var(--faint);
+  font-size: 12px;
+}

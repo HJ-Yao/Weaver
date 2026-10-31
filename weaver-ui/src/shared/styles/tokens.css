@@ -1,0 +1,235 @@
+/*
+ * Design tokens — the single source of colour, spacing, radius and type.
+ *
+ * Rules (see CONVENTIONS.md §5):
+ *   1. Components read tokens, never raw hex values.
+ *   2. Every accent preset redefines the ground *and* the accent ink so the
+ *      chrome stays coherent; light mode keeps the ground neutral and only
+ *      darkens the ink.
+ *   3. New tokens must describe a role (`--panel`), not a look (`--dark-purple`).
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg: #120a1c;
+  --panel: #180f26;
+  --panel-2: #1e1430;
+  --panel-3: #251a3a;
+  --border: #2c1e42;
+  --border-strong: #3b2857;
+
+  /* Text */
+  --text: #ede7f6;
+  --muted: #9b8fb2;
+  --faint: #6f6387;
+
+  /* Accent */
+  --accent: #a66cff;
+  --accent-2: #7c3aed;
+  --accent-soft: rgba(166, 108, 255, 0.12);
+
+  /* Semantic status */
+  --gold: #e8b45a;
+  --green: #5fd3a0;
+  --red: #e0667a;
+  --diff-add: rgba(95, 211, 160, 0.12);
+  --diff-del: rgba(224, 102, 122, 0.12);
+
+  /* Elevation */
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+
+  /* Spacing scale: 4px steps. Use these instead of arbitrary pixel values. */
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 22px;
+  --space-7: 28px;
+  --space-8: 40px;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  /* Type */
+  --font-mono: 'Cascadia Code', 'JetBrains Mono', Consolas, 'SFMono-Regular', monospace;
+  --font-sans: 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  /* Layering */
+  --z-dropdown: 30;
+  --z-overlay: 40;
+  --z-toast: 60;
+}
+
+/* ---------- accent presets (dark ground) ---------- */
+
+:root[data-accent='violet'] {
+  --accent: #a66cff;
+  --accent-2: #7c3aed;
+  --accent-soft: rgba(166, 108, 255, 0.12);
+  --bg: #120a1c;
+  --panel: #180f26;
+  --panel-2: #1e1430;
+  --panel-3: #251a3a;
+  --border: #2c1e42;
+  --border-strong: #3b2857;
+}
+
+:root[data-accent='blue'] {
+  --accent: #5b8cff;
+  --accent-2: #3b6fe0;
+  --accent-soft: rgba(91, 140, 255, 0.12);
+  --bg: #0b101a;
+  --panel: #111827;
+  --panel-2: #172033;
+  --panel-3: #1e2a42;
+  --border: #24324d;
+  --border-strong: #33466a;
+}
+
+:root[data-accent='teal'] {
+  --accent: #3cc9c0;
+  --accent-2: #1f9e96;
+  --accent-soft: rgba(60, 201, 192, 0.12);
+  --bg: #071418;
+  --panel: #0c1c21;
+  --panel-2: #11252c;
+  --panel-3: #17313a;
+  --border: #1e3943;
+  --border-strong: #2a5260;
+}
+
+:root[data-accent='green'] {
+  --accent: #5fd3a0;
+  --accent-2: #2e9e6b;
+  --accent-soft: rgba(95, 211, 160, 0.12);
+  --bg: #091510;
+  --panel: #0f1e18;
+  --panel-2: #142921;
+  --panel-3: #1a352b;
+  --border: #213d31;
+  --border-strong: #2e5545;
+}
+
+:root[data-accent='amber'] {
+  --accent: #e8b45a;
+  --accent-2: #c08a2e;
+  --accent-soft: rgba(232, 180, 90, 0.12);
+  --bg: #17110a;
+  --panel: #1f1810;
+  --panel-2: #282017;
+  --panel-3: #33291d;
+  --border: #3a2e20;
+  --border-strong: #4f3e2a;
+}
+
+:root[data-accent='coral'] {
+  --accent: #ff7a6b;
+  --accent-2: #e05545;
+  --accent-soft: rgba(255, 122, 107, 0.12);
+  --bg: #180d0c;
+  --panel: #211311;
+  --panel-2: #2b1a17;
+  --panel-3: #38221e;
+  --border: #3f2521;
+  --border-strong: #57332d;
+}
+
+:root[data-accent='pink'] {
+  --accent: #f472b6;
+  --accent-2: #db2777;
+  --accent-soft: rgba(244, 114, 182, 0.12);
+  --bg: #170b13;
+  --panel: #201019;
+  --panel-2: #2a1620;
+  --panel-3: #371d2a;
+  --border: #3d2030;
+  --border-strong: #552c43;
+}
+
+:root[data-accent='graphite'] {
+  --accent: #b8c0cc;
+  --accent-2: #7a8494;
+  --accent-soft: rgba(184, 192, 204, 0.12);
+  --bg: #121316;
+  --panel: #181a1f;
+  --panel-2: #1f2228;
+  --panel-3: #272b33;
+  --border: #2c3038;
+  --border-strong: #3d434e;
+}
+
+/* ---------- light theme ---------- */
+
+/* The ground goes neutral; each accent keeps a darker ink so the choice still shows. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f6f2fb;
+  --panel: #ffffff;
+  --panel-2: #f1ebf8;
+  --panel-3: #e9e0f4;
+  --border: #ded3ec;
+  --border-strong: #c9b9df;
+  --text: #1d1428;
+  --muted: #6e6280;
+  --faint: #8d819e;
+  --gold: #a06a12;
+  --green: #1f8a5f;
+  --red: #b3324a;
+  --diff-add: rgba(31, 138, 95, 0.1);
+  --diff-del: rgba(179, 50, 74, 0.1);
+  --shadow: 0 8px 24px rgba(29, 20, 40, 0.12);
+}
+
+:root[data-theme='light'][data-accent='violet'] {
+  --accent: #7c3aed;
+  --accent-2: #6d28d9;
+  --accent-soft: rgba(124, 58, 237, 0.1);
+}
+
+:root[data-theme='light'][data-accent='blue'] {
+  --accent: #2f5bc4;
+  --accent-2: #2749a3;
+  --accent-soft: rgba(47, 91, 196, 0.1);
+}
+
+:root[data-theme='light'][data-accent='teal'] {
+  --accent: #147d76;
+  --accent-2: #0f625d;
+  --accent-soft: rgba(20, 125, 118, 0.1);
+}
+
+:root[data-theme='light'][data-accent='green'] {
+  --accent: #1f7a50;
+  --accent-2: #186140;
+  --accent-soft: rgba(31, 122, 80, 0.1);
+}
+
+:root[data-theme='light'][data-accent='amber'] {
+  --accent: #8f6414;
+  --accent-2: #74500f;
+  --accent-soft: rgba(143, 100, 20, 0.1);
+}
+
+:root[data-theme='light'][data-accent='coral'] {
+  --accent: #c0392b;
+  --accent-2: #9e2d22;
+  --accent-soft: rgba(192, 57, 43, 0.1);
+}
+
+:root[data-theme='light'][data-accent='pink'] {
+  --accent: #c11d68;
+  --accent-2: #9d1555;
+  --accent-soft: rgba(193, 29, 104, 0.1);
+}
+
+:root[data-theme='light'][data-accent='graphite'] {
+  --accent: #4f5967;
+  --accent-2: #3d4652;
+  --accent-soft: rgba(79, 89, 103, 0.1);
+}

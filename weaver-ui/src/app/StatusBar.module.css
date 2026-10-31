@@ -1,0 +1,31 @@
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0 14px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  font: 11px/1 var(--font-mono);
+  color: var(--faint);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.ok {
+  background: var(--green);
+}
+
+.sep {
+  width: 1px;
+  height: 10px;
+  background: var(--border);
+}
+
+.spacer {
+  flex: 1;
+}

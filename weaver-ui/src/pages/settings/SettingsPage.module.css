@@ -1,0 +1,385 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  padding: var(--space-6) var(--space-7);
+  background: var(--bg);
+  overflow-y: auto;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  margin-bottom: 18px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--panel-2);
+}
+
+.title {
+  margin: 0 0 var(--space-1);
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.navItem {
+  padding: var(--space-3) 10px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.navItem:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+
+.navItemActive {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.body {
+  min-width: 0;
+}
+
+/* ---------- shared panel ---------- */
+
+.panel {
+  display: grid;
+  gap: 11px;
+  align-content: start;
+  max-width: 560px;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+
+.tiny {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.field input,
+.field select {
+  height: 32px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: var(--border-strong);
+  outline: none;
+}
+
+/* ---------- appearance ---------- */
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.swatch {
+  width: 24px;
+  height: 24px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: var(--swatch);
+  box-shadow: 0 0 0 1px var(--border);
+  transition: transform 0.12s ease;
+}
+
+.swatch:hover {
+  transform: scale(1.1);
+}
+
+.swatchActive {
+  border-color: var(--text);
+  box-shadow:
+    0 0 0 1px var(--border),
+    0 0 0 3px var(--accent-soft);
+}
+
+/* ---------- shortcuts ---------- */
+
+.shortcutGroup {
+  display: grid;
+}
+
+.groupTitle {
+  margin: var(--space-3) 0 2px;
+  font-size: 10.5px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+
+.shortcutRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.shortcutRow:hover {
+  background: var(--panel-2);
+}
+
+.shortcutRow:last-child {
+  border-bottom: 0;
+}
+
+.recording {
+  border-radius: var(--radius-sm);
+  outline: 1px dashed var(--accent);
+  color: var(--accent);
+}
+
+.keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: var(--text);
+}
+
+.recording .keys {
+  color: var(--accent);
+}
+
+.plus {
+  color: var(--faint);
+}
+
+.kbd {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--text);
+  font: 11px/1 var(--font-mono);
+}
+
+/* ---------- model profiles ---------- */
+
+.configList {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.config {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-2);
+}
+
+.configActive {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.configName {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.configMeta {
+  font: 11px/1.4 var(--font-mono);
+  color: var(--faint);
+}
+
+.badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 18px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.smallButton {
+  height: 26px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.smallButton:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.addButton {
+  justify-self: start;
+  height: 34px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--accent-2);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.addButton:hover {
+  border-color: var(--accent);
+}
+
+/* ---------- dialog ---------- */
+
+.dialog {
+  width: min(520px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.dialog::backdrop {
+  background: rgba(6, 3, 12, 0.62);
+}
+
+.form {
+  display: grid;
+  gap: 11px;
+  padding: 18px;
+}
+
+.dialogHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 var(--space-1);
+}
+
+.dialogTitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.closeButton {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  color: var(--faint);
+  font-size: 16px;
+}
+
+.closeButton:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.primaryButton {
+  height: 32px;
+  padding: 0 18px;
+  border-radius: var(--radius-md);
+  background: var(--accent-2);
+  color: #fff;
+  font-weight: 600;
+}
+
+.primaryButton:hover {
+  background: var(--accent);
+}
+
+@media (max-width: 820px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}

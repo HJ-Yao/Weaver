@@ -1,0 +1,109 @@
+.viewer {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 10px var(--space-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.fileHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  font: 11px/1.4 var(--font-mono);
+  color: var(--muted);
+}
+
+.path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat {
+  display: flex;
+  gap: var(--space-2);
+  flex: none;
+  white-space: nowrap;
+}
+
+.add {
+  color: var(--green);
+}
+
+.del {
+  color: var(--red);
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  color: var(--faint);
+}
+
+.close:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px var(--space-5) 20px;
+}
+
+.empty {
+  margin: 0;
+  padding: 10px var(--space-4);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.diff {
+  margin: 0;
+  padding: var(--space-3) 0;
+  font: 12px/1.6 var(--font-mono);
+}
+
+/*
+ * Each line is a block, so the newline text nodes between them must not add
+ * their own line box — hence `white-space: normal` on the wrapper and
+ * `pre-wrap` on the lines themselves.
+ */
+.line {
+  display: block;
+  padding: 0 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.context {
+  color: var(--muted);
+}
+
+.add {
+  background: var(--diff-add);
+  color: var(--green);
+}
+
+.del {
+  background: var(--diff-del);
+  color: var(--red);
+}

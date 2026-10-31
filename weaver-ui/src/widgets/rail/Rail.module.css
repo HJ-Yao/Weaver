@@ -1,0 +1,33 @@
+.rail {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 10px 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+}
+
+.button {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  color: var(--muted);
+}
+
+.button:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.spacer {
+  flex: 1;
+}

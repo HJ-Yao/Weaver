@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" href="/brand/weaver-logo.png" />
+    <title>Weaver — Agent Harness</title>
+    <script>
+      // Apply the persisted theme before first paint; without this the app flashes the default dark ground.
+      try {
+        const theme = localStorage.getItem('weaver.theme');
+        const accent = localStorage.getItem('weaver.accent');
+        if (theme) document.documentElement.dataset.theme = theme;
+        if (accent) document.documentElement.dataset.accent = accent;
+      } catch (error) {
+        // Storage may be unavailable (private mode); the default theme is a safe fallback.
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
