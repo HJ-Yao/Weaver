@@ -94,7 +94,7 @@ public final class RunService {
                     .name("weaver-run-" + sessionId)
                     .start(() -> {
                         try {
-                            execute(sessionId, content, channel.streamSink(), emitter, gate);
+                            execute(sessionId, content, channel, emitter, gate);
                         } finally {
                             activeGates.remove(sessionId, gate);
                             gate.cancelAll();
@@ -124,13 +124,14 @@ public final class RunService {
     private void execute(
             String sessionId,
             String content,
-            SseStreamSink streamSink,
+            SseChannel channel,
             SseEmitter emitter,
             SseApprovalGate gate) {
+        SseStreamSink streamSink = channel.streamSink();
         try {
             new RunLoop(
                             model,
-                            eventStore,
+                            channel.withToolResultRelay(eventStore),
                             new RunLoopConfig(
                                     maxSteps,
                                     streamSink,

@@ -5,6 +5,8 @@ import type {
   SessionSummaryDto,
 } from '@/shared/api/sessions';
 import { sessionApi } from '@/shared/api/sessions';
+import type { StreamHandlers } from '@/shared/api/stream';
+import { streamMessage } from '@/shared/api/stream';
 import { transcriptFromSnapshot } from './model';
 
 vi.mock('@/shared/api/sessions', () => ({
@@ -17,11 +19,16 @@ vi.mock('@/shared/api/sessions', () => ({
   },
 }));
 
+vi.mock('@/shared/api/stream', () => ({
+  streamMessage: vi.fn(),
+}));
+
 // store 在模块加载时只读取一次模式，因此必须先固定环境，再动态导入真实模式单例。
 vi.stubEnv('VITE_USE_MOCK', 'false');
 const { useSessionStore } = await import('./store');
 
 const mockedSessionApi = vi.mocked(sessionApi);
+const mockedStreamMessage = vi.mocked(streamMessage);
 
 const emptySnapshot: SessionSnapshotDto = {
   messages: [],
@@ -149,4 +156,57 @@ describe('useSessionStore real API mode', () => {
     expect(state.transcript).toEqual([]);
   });
 
+  it('updates tool cards from stream results and ignores unknown calls', () => {
+    let handlers: StreamHandlers | undefined;
+    mockedStreamMessage.mockImplementation((_sessionId, _content, streamHandlers) => {
+      handlers = streamHandlers;
+      return new Promise<void>(() => {});
+    });
+    useSessionStore.setState({ activeSessionId: firstSession.id });
+
+    useSessionStore.getState().sendMessage('x');
+    handlers?.onTool?.({
+      callId: 'call-success',
+      toolName: 'file',
+      argumentsJson: '{"op":"read"}',
+    });
+    handlers?.onToolResult?.({
+      callId: 'call-success',
+      content: 'file contents',
+      isError: false,
+      durationMs: 125,
+    });
+    handlers?.onTool?.({
+      callId: 'call-failed',
+      toolName: 'shell',
+      argumentsJson: '{"command":"false"}',
+    });
+    handlers?.onToolResult?.({
+      callId: 'call-failed',
+      content: 'exit code 1',
+      isError: true,
+      durationMs: 250,
+    });
+    handlers?.onToolResult?.({
+      callId: 'call-missing',
+      content: 'late result',
+      isError: false,
+      durationMs: 10,
+    });
+
+    const transcript = useSessionStore.getState().transcript;
+    expect(transcript.find((item) => item.id === 'call-success')).toMatchObject({
+      kind: 'tool',
+      status: 'done',
+      durationMs: 125,
+      resultText: 'file contents',
+    });
+    expect(transcript.find((item) => item.id === 'call-failed')).toMatchObject({
+      kind: 'tool',
+      status: 'failed',
+      durationMs: 250,
+      resultText: 'exit code 1',
+    });
+    expect(transcript).toHaveLength(4);
+  });
 });

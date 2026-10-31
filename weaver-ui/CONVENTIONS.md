@@ -127,7 +127,6 @@ pages → widgets → features → entities → shared
 
 - [ ] 会话列表 / 详情接 `GET /api/sessions`（替换 `store.ts` 中的 `demoSessions`）
 - [ ] 发送消息接真实 SSE（`VITE_USE_MOCK=false`），失败态与重连策略
-- [ ] 工具卡片状态由 `tool` 事件与完成事件驱动（当前只有 starting 事件）
 - [ ] 工作区与模型配置持久化到 `~/.weaver/config.json`
 - [ ] 插件 / 技能目录接后端；公开 / 个人筛选下沉到服务端
 - [ ] 状态栏的 tokens、seq、连接状态改为真实值

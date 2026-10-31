@@ -9,6 +9,7 @@ import { API_BASE, ApiError } from './http';
  *
  *   delta    -> 纯文本分片
  *   tool     -> { callId, toolName, argumentsJson }
+ *   tool_result -> { callId, content, isError, durationMs }
  *   approval -> { callId, toolName, argumentsJson, reversibility, timeoutSeconds }
  *   done     -> "STOP" | "LENGTH" | "ERROR"
  *   error    -> 纯文本
@@ -19,6 +20,14 @@ export interface StreamToolCall {
   callId: string;
   toolName: string;
   argumentsJson: string;
+}
+
+/** 工具执行完成的结果。 */
+export interface StreamToolResult {
+  callId: string;
+  content: string;
+  isError: boolean;
+  durationMs: number;
 }
 
 /** 待处理的审批；通过 `sessionApi.resolveApproval` 响应。 */
@@ -37,6 +46,7 @@ export type StopReason = 'STOP' | 'LENGTH' | 'ERROR';
 export interface StreamHandlers {
   onDelta?: (delta: string) => void;
   onTool?: (call: StreamToolCall) => void;
+  onToolResult?: (result: StreamToolResult) => void;
   onApproval?: (approval: StreamApproval) => void;
   onDone?: (reason: StopReason) => void;
   onError?: (message: string) => void;
@@ -104,6 +114,9 @@ function dispatchFrame(frame: string, handlers: StreamHandlers): void {
       break;
     case 'tool':
       handlers.onTool?.(JSON.parse(parsed.data) as StreamToolCall);
+      break;
+    case 'tool_result':
+      handlers.onToolResult?.(JSON.parse(parsed.data) as StreamToolResult);
       break;
     case 'approval':
       handlers.onApproval?.(JSON.parse(parsed.data) as StreamApproval);

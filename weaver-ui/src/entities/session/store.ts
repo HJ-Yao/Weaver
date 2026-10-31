@@ -285,6 +285,20 @@ export const useSessionStore = create<SessionState>()((set, get) => {
           };
           set((state) => ({ transcript: [...state.transcript, tool] }));
         },
+        onToolResult: (result) => {
+          set((state) => ({
+            transcript: state.transcript.map((item) =>
+              item.kind === 'tool' && item.id === result.callId
+                ? {
+                    ...item,
+                    status: result.isError ? 'failed' : 'done',
+                    durationMs: result.durationMs,
+                    resultText: result.content,
+                  }
+                : item,
+            ),
+          }));
+        },
         onApproval: (approval) => {
           const approvalItem: ApprovalItem = {
             kind: 'approval',

@@ -1,5 +1,6 @@
 package cn.yhjyhj.weaver.server.sse;
 
+import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import java.time.Duration;
 import java.util.Objects;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -42,5 +43,15 @@ public final class SseChannel {
      */
     public SseApprovalGate approvalGate(Duration timeout) {
         return new SseApprovalGate(sender, timeout);
+    }
+
+    /**
+     * 在事件落库后把工具完成结果转发到当前 SSE 连接。
+     *
+     * @param delegate 原始会话事件存储
+     * @return 带工具结果转发的装饰器
+     */
+    public SessionEventStore withToolResultRelay(SessionEventStore delegate) {
+        return new SseEventStore(delegate, sender);
     }
 }
