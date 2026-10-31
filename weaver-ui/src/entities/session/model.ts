@@ -93,15 +93,19 @@ export function transcriptFromSnapshot(snapshot: SessionSnapshotDto): Transcript
     expanded: false,
   }));
 
-  const approvals: ApprovalItem[] = snapshot.approvals.map((approval) => ({
-    kind: 'approval',
-    id: approval.callId,
-    toolName: approval.toolName,
-    argumentsJson: '',
-    reversibility: 'IRREVERSIBLE',
-    timeoutSeconds: 0,
-    status: approval.approved ? 'approved' : 'rejected',
-  }));
+  // toolName 为 `unknown` 表示这次调用是自动放行的，没有走过用户审批，
+  // 渲染成「已批准」卡片只会制造噪音。判定依据见 SessionSnapshot.ApprovalRecord 的注释。
+  const approvals: ApprovalItem[] = snapshot.approvals
+    .filter((approval) => approval.toolName !== 'unknown')
+    .map((approval) => ({
+      kind: 'approval',
+      id: approval.callId,
+      toolName: approval.toolName,
+      argumentsJson: '',
+      reversibility: 'IRREVERSIBLE',
+      timeoutSeconds: 0,
+      status: approval.approved ? 'approved' : 'rejected',
+    }));
 
   return [...messages, ...tools, ...approvals];
 }

@@ -51,4 +51,20 @@ describe('transcriptFromSnapshot', () => {
     expect(approvals).toHaveLength(1);
     expect(approvals[0]).toMatchObject({ id: 'call-3', status: 'rejected' });
   });
+
+  it('drops auto-allowed calls that never asked the user', () => {
+    const withAutoAllow = {
+      ...snapshot,
+      approvals: [
+        { callId: 'call-auto', toolName: 'unknown', approved: true, reason: 'allowed' },
+        { callId: 'call-3', toolName: 'git.commit', approved: false, reason: 'user' },
+      ],
+    };
+
+    const approvals = transcriptFromSnapshot(withAutoAllow).filter(
+      (item) => item.kind === 'approval',
+    );
+
+    expect(approvals.map((item) => item.id)).toEqual(['call-3']);
+  });
 });

@@ -157,6 +157,28 @@ describe('useSessionStore real API mode', () => {
     expect(state.transcript).toEqual([]);
   });
 
+  it('keeps the run active after the model turn until the stream closes', async () => {
+    let handlers: StreamHandlers | undefined;
+    let closeStream: () => void = () => undefined;
+    mockedStreamMessage.mockImplementation((_sessionId, _content, streamHandlers) => {
+      handlers = streamHandlers;
+      return new Promise<void>((resolve) => {
+        closeStream = resolve;
+      });
+    });
+    useSessionStore.setState({ activeSessionId: firstSession.id });
+
+    useSessionStore.getState().sendMessage('x');
+    handlers?.onDone?.('STOP');
+
+    // 模型这一轮结束了，但工具/审批可能还在跑，运行状态不能结束。
+    expect(useSessionStore.getState().running).toBe(true);
+
+    closeStream();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(useSessionStore.getState().running).toBe(false);
+  });
+
   it('updates tool cards from stream results and ignores unknown calls', () => {
     let handlers: StreamHandlers | undefined;
     mockedStreamMessage.mockImplementation((_sessionId, _content, streamHandlers) => {

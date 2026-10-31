@@ -29,9 +29,12 @@ export function MessageStream() {
       aria-live="polite"
     >
       {transcript.map((item) => {
-        if (item.kind === 'message') return <MessageBubble key={item.id} item={item} />;
-        if (item.kind === 'tool') return <ToolCard key={item.id} item={item} />;
-        return <ApprovalCard key={item.id} item={item} />;
+        // 工具与审批共用同一个 callId，因此 React key 必须带上类型前缀。
+        if (item.kind === 'message') {
+          return <MessageBubble key={`message-${item.id}`} item={item} />;
+        }
+        if (item.kind === 'tool') return <ToolCard key={`tool-${item.id}`} item={item} />;
+        return <ApprovalCard key={`approval-${item.id}`} item={item} />;
       })}
     </div>
   );

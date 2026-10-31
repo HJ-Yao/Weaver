@@ -324,10 +324,11 @@ export const useSessionStore = create<SessionState>()((set, get) => {
           set({ running: false });
         },
         onDone: () => {
+          // 只代表模型这一轮结束；工具执行与审批可能仍在继续，
+          // 因此 running 要等 SSE 流关闭后再复位（见下方的 finally）。
           updateItem(reply.id, (item) =>
             item.kind === 'message' ? { ...item, streaming: false } : item,
           );
-          set({ running: false });
         },
         onError: (message) => {
           updateItem(reply.id, (item) =>
@@ -337,12 +338,16 @@ export const useSessionStore = create<SessionState>()((set, get) => {
           );
           set({ running: false });
         },
-      }).catch(() => {
-        updateItem(reply.id, (item) =>
-          item.kind === 'message' ? { ...item, streaming: false } : item,
-        );
-        set({ running: false });
-      });
+      })
+        .catch(() => {
+          updateItem(reply.id, (item) =>
+            item.kind === 'message' ? { ...item, streaming: false } : item,
+          );
+        })
+        .finally(() => {
+          // 服务端关闭响应 = 本次运行真正结束，此时才允许再次发送。
+          set({ running: false });
+        });
     },
 
     cancelRun: () => {
