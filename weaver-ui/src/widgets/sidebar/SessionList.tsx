@@ -1,7 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSessionStore } from '@/entities/session/store';
 import { formatRelativeTime } from '@/shared/lib/format';
-import { useUiStore } from '@/app/ui-store';
 import styles from './Sidebar.module.css';
 
 /**
@@ -13,9 +12,16 @@ import styles from './Sidebar.module.css';
 export function SessionList() {
   const sessions = useSessionStore((state) => state.sessions);
   const activeSessionId = useSessionStore((state) => state.activeSessionId);
+  const status = useSessionStore((state) => state.status);
+  const error = useSessionStore((state) => state.error);
+  const loadSessions = useSessionStore((state) => state.loadSessions);
   const selectSession = useSessionStore((state) => state.selectSession);
-  const showToast = useUiStore((state) => state.showToast);
+  const createSession = useSessionStore((state) => state.createSession);
   const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    void loadSessions();
+  }, [loadSessions]);
 
   const visibleSessions = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -33,7 +39,7 @@ export function SessionList() {
         <button
           type="button"
           className={styles.newSession}
-          onClick={() => showToast('新建会话将在接入 API 后可用。')}
+          onClick={() => void createSession()}
         >
           ＋ 新建会话
         </button>
@@ -48,23 +54,47 @@ export function SessionList() {
       </div>
 
       <div className={styles.list}>
-        {visibleSessions.map((session) => (
-          <button
-            key={session.id}
-            type="button"
-            className={`${styles.session} ${session.id === activeSessionId ? styles.sessionActive : ''}`}
-            onClick={() => selectSession(session.id)}
-          >
-            <span className={styles.sessionTitle}>{session.title}</span>
-            <span className={styles.sessionMeta}>
-              {session.stepCount ? `${session.stepCount} 步 · ` : ''}
-              {formatRelativeTime(session.createdAt)}
-            </span>
-            {session.id === activeSessionId && <span className={styles.sessionDot} aria-hidden="true" />}
-          </button>
-        ))}
+        {status === 'idle' || status === 'loading' ? (
+          <p className={styles.state}>加载中…</p>
+        ) : status === 'error' ? (
+          // A failed detail request also lands here, so the list is hidden while
+          // the chat keeps the previous transcript.
+          // TODO(M2): split list and detail errors and show the latter as a banner.
+          <div className={styles.state} role="alert">
+            <p className={styles.error}>{error ?? '会话加载失败'}</p>
+            <button
+              type="button"
+              className={styles.retry}
+              onClick={() => void loadSessions(true)}
+            >
+              重试
+            </button>
+          </div>
+        ) : sessions.length === 0 ? (
+          <p className={styles.state}>还没有会话</p>
+        ) : (
+          <>
+            {visibleSessions.map((session) => (
+              <button
+                key={session.id}
+                type="button"
+                className={`${styles.session} ${session.id === activeSessionId ? styles.sessionActive : ''}`}
+                onClick={() => void selectSession(session.id)}
+              >
+                <span className={styles.sessionTitle}>{session.title}</span>
+                <span className={styles.sessionMeta}>
+                  {session.stepCount ? `${session.stepCount} 步 · ` : ''}
+                  {formatRelativeTime(session.createdAt)}
+                </span>
+                {session.id === activeSessionId && (
+                  <span className={styles.sessionDot} aria-hidden="true" />
+                )}
+              </button>
+            ))}
 
-        {visibleSessions.length === 0 && <p className={styles.empty}>没有匹配的会话</p>}
+            {visibleSessions.length === 0 && <p className={styles.empty}>没有匹配的会话</p>}
+          </>
+        )}
       </div>
 
       <div className={styles.footer}>

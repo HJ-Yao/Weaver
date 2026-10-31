@@ -6,3 +6,47 @@
   height: 100%;
   background: var(--bg);
 }
+
+.stateMessage,
+.stateError {
+  align-self: center;
+  justify-self: center;
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.stateError {
+  max-width: 420px;
+  padding: var(--space-4);
+  color: var(--text);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.emptyState {
+  align-self: center;
+  justify-self: center;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.emptyAction {
+  padding: 8px 14px;
+  border: 1px solid var(--accent-2);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.emptyAction:hover {
+  border-color: var(--accent);
+}

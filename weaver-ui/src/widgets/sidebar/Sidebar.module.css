@@ -72,6 +72,30 @@
   font-size: 12px;
 }
 
+.state {
+  margin: var(--space-5) var(--space-3);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.error {
+  margin: 0 0 var(--space-3);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.retry {
+  padding: 5px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.retry:hover {
+  border-color: var(--accent);
+}
+
 /* ---------- sessions ---------- */
 
 .session {

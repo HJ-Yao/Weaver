@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { sessionApi } from '@/shared/api/sessions';
 import { streamMessage } from '@/shared/api/stream';
+import { transcriptFromSnapshot } from './model';
 import type { ApprovalItem, MessageItem, SessionSummary, ToolCallItem, TranscriptItem } from './model';
 
 /**
@@ -17,6 +18,9 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
 /** Canned reply used until the live stream is the default. */
 const MOCK_REPLY = '收到。我会先读取相关文件，再给出改动方案；涉及写操作时会在这里请求审批。';
 
+/** Lifecycle state shared by the session list and the open conversation. */
+type SessionStatus = 'idle' | 'loading' | 'ready' | 'error';
+
 interface SessionState {
   /** Sessions shown in the sidebar. */
   sessions: SessionSummary[];
@@ -26,8 +30,17 @@ interface SessionState {
   transcript: TranscriptItem[];
   /** True while a run is in flight; the composer stays disabled. */
   running: boolean;
+  /** Current list/detail loading state. */
+  status: SessionStatus;
+  /** User-facing message for the most recent session request failure. */
+  error: string | null;
 
-  selectSession: (id: string) => void;
+  /** Load the session list once, or retry it when `force` is true. */
+  loadSessions: (force?: boolean) => Promise<void>;
+  /** Open a session and, in real mode, load its replayable snapshot. */
+  selectSession: (id: string) => Promise<void>;
+  /** Create a new session and make it active. */
+  createSession: (title?: string) => Promise<void>;
   sendMessage: (content: string) => void;
   resolveApproval: (callId: string, approved: boolean) => void;
   toggleToolExpanded: (callId: string) => void;
@@ -36,7 +49,11 @@ interface SessionState {
 let idCounter = 0;
 const nextId = (prefix: string) => `${prefix}-${++idCounter}`;
 
-/** Demo metadata; TODO(M2): replace with `sessionApi.list()` on mount. */
+// Detail responses can arrive out of order after rapid sidebar clicks. Only the
+// latest request is allowed to write the transcript or error state.
+let detailRequestId = 0;
+
+/** Demo metadata used when the UI runs without the server. */
 const demoSessions: SessionSummary[] = [
   {
     id: 'demo-approval',
@@ -110,14 +127,106 @@ const demoTranscript: TranscriptItem[] = [
 ];
 
 export const useSessionStore = create<SessionState>()((set, get) => ({
-  sessions: demoSessions,
-  activeSessionId: demoSessions[0]?.id ?? null,
-  transcript: demoTranscript,
+  sessions: USE_MOCK ? demoSessions : [],
+  activeSessionId: USE_MOCK ? (demoSessions[0]?.id ?? null) : null,
+  transcript: USE_MOCK ? demoTranscript : [],
   running: false,
+  status: USE_MOCK ? 'ready' : 'idle',
+  error: null,
 
-  selectSession: (id) => {
-    set({ activeSessionId: id });
-    // TODO(M2): GET /sessions/{id} and rebuild the transcript with `transcriptFromSnapshot`.
+  loadSessions: async (force = false) => {
+    if (!force && get().status !== 'idle') return;
+
+    if (USE_MOCK) {
+      set({ status: 'ready', error: null });
+      return;
+    }
+
+    set({ status: 'loading', error: null });
+    try {
+      const sessions = await sessionApi.list();
+      set({ sessions });
+
+      const firstSession = sessions[0];
+      if (!get().activeSessionId && firstSession) {
+        await get().selectSession(firstSession.id);
+        return;
+      }
+
+      set({ status: 'ready', error: null });
+    } catch (error) {
+      set({
+        status: 'error',
+        error: `会话列表加载失败：${readableError(error)}`,
+      });
+    }
+  },
+
+  selectSession: async (id) => {
+    if (USE_MOCK) {
+      set({ activeSessionId: id });
+      return;
+    }
+
+    const requestId = ++detailRequestId;
+    set({ activeSessionId: id, error: null });
+
+    try {
+      const detail = await sessionApi.detail(id);
+      if (requestId !== detailRequestId) return;
+
+      set({
+        transcript: transcriptFromSnapshot(detail.snapshot),
+        status: 'ready',
+        error: null,
+      });
+    } catch (error) {
+      if (requestId !== detailRequestId) return;
+
+      // Keep the currently visible transcript; the next successful selection
+      // replaces it once the server is reachable again.
+      set({
+        status: 'error',
+        error: `会话详情加载失败：${readableError(error)}`,
+      });
+    }
+  },
+
+  createSession: async (title = '新会话') => {
+    if (USE_MOCK) {
+      const session: SessionSummary = {
+        id: `${Date.now()}`,
+        title,
+        createdAt: new Date().toISOString(),
+      };
+      set((state) => ({
+        sessions: [...state.sessions, session],
+        activeSessionId: session.id,
+        transcript: [],
+        status: 'ready',
+        error: null,
+      }));
+      return;
+    }
+
+    try {
+      const session = await sessionApi.create(title);
+      // A created session is already empty, so invalidate any in-flight detail
+      // request instead of loading the previous session over this one.
+      detailRequestId += 1;
+      set((state) => ({
+        sessions: [...state.sessions, session],
+        activeSessionId: session.id,
+        transcript: [],
+        status: 'ready',
+        error: null,
+      }));
+    } catch (error) {
+      set({
+        status: 'error',
+        error: `新建会话失败：${readableError(error)}`,
+      });
+    }
   },
 
   sendMessage: (content) => {
@@ -240,4 +349,10 @@ function patchItem(
   set((state) => ({
     transcript: state.transcript.map((item) => (item.id === id ? update(item) : item)),
   }));
+}
+
+/** Convert an unknown request failure into text suitable for the UI. */
+function readableError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message || '未知错误';
 }
