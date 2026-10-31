@@ -21,7 +21,13 @@ export function MessageStream() {
   }, [transcript]);
 
   return (
-    <div className={styles.messages} ref={listRef} role="log" aria-label="对话消息" aria-live="polite">
+    <div
+      className={styles.messages}
+      ref={listRef}
+      role="log"
+      aria-label="对话消息"
+      aria-live="polite"
+    >
       {transcript.map((item) => {
         if (item.kind === 'message') return <MessageBubble key={item.id} item={item} />;
         if (item.kind === 'tool') return <ToolCard key={item.id} item={item} />;
@@ -43,6 +49,7 @@ function MessageBubble({ item }: { item: MessageItem }) {
       )}
       <div className={`${styles.bubble} ${item.streaming ? styles.streaming : ''}`}>
         {item.content}
+        {item.stopped && <span className={styles.stopped}>已停止</span>}
       </div>
     </article>
   );

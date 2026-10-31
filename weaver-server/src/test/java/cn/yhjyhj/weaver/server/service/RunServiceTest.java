@@ -22,8 +22,11 @@ import cn.yhjyhj.weaver.core.tool.Tool;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import cn.yhjyhj.weaver.server.api.dto.SessionSummary;
 import cn.yhjyhj.weaver.server.model.EchoModelClient;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Flow;
@@ -38,6 +41,8 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class RunServiceTest {
+
+    private static final ObjectMapper JSON = new ObjectMapper(); // 验证取消 SSE 的载荷字段
 
     @Test
     void runsLoopOnVirtualThreadAndCompletesSseEmitter() throws Exception {
@@ -169,6 +174,98 @@ class RunServiceTest {
             releaseModel.countDown();
         }
         assertTrue(emitter.awaitCompletion(Duration.ofSeconds(5)));
+    }
+
+    @Test
+    void returnsFalseWhenCancellingWithoutActiveRun() {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(store);
+        RunService service = new RunService(dependencies(
+                sessions, store, new EchoModelClient(), ToolRegistry.empty(), 300));
+
+        assertFalse(service.cancel("missing-session"));
+    }
+
+    @Test
+    void cancelsActiveRunAndEmitsAbortedEvent() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(store);
+        SessionSummary summary = sessions.create("Cancel");
+        RecordingEmitter emitter = new RecordingEmitter();
+        CountDownLatch modelStarted = new CountDownLatch(1);
+        CountDownLatch releaseModel = new CountDownLatch(1);
+        EchoModelClient echo = new EchoModelClient();
+        ModelClient blockingModel = request -> {
+            modelStarted.countDown();
+            try {
+                releaseModel.await();
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+            }
+            return echo.stream(request);
+        };
+        RunService service = new RunService(dependencies(
+                sessions,
+                store,
+                blockingModel,
+                ToolRegistry.empty(),
+                30,
+                () -> emitter));
+
+        service.run(summary.id(), "hello");
+        assertTrue(modelStarted.await(2, TimeUnit.SECONDS));
+        assertTrue(service.cancel(summary.id()));
+        releaseModel.countDown();
+
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(5)));
+        SessionSnapshot snapshot = SessionEvents.replay(store.from(summary.id(), 0L));
+        assertTrue(snapshot.aborted());
+        SentEvent aborted = emitter.sentEvents().stream()
+                .filter(event -> event.name().equals("aborted"))
+                .findFirst()
+                .orElseThrow();
+        Map<String, Object> payload = JSON.convertValue(
+                aborted.data(), new TypeReference<>() {});
+        assertEquals("cancelled", payload.get("reason"));
+    }
+
+    @Test
+    void doesNotEmitAbortedWhenTheLoopFailsInternally() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(store);
+        SessionSummary summary = sessions.create("Failed");
+        RecordingEmitter emitter = new RecordingEmitter();
+        ModelClient failingModel = request -> {
+            throw new IllegalStateException("boom");
+        };
+        RunService service = new RunService(dependencies(
+                sessions, store, failingModel, ToolRegistry.empty(), 30, () -> emitter));
+
+        service.run(summary.id(), "hello");
+
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(5)));
+        assertTrue(
+                emitter.sentEvents().stream().noneMatch(event -> event.name().equals("aborted")));
+    }
+
+    @Test
+    void returnsFalseWhenCancellingAfterRunCompletes() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(store);
+        SessionSummary summary = sessions.create("Completed");
+        RecordingEmitter emitter = new RecordingEmitter();
+        RunService service = new RunService(dependencies(
+                sessions,
+                store,
+                new EchoModelClient(),
+                ToolRegistry.empty(),
+                30,
+                () -> emitter));
+
+        service.run(summary.id(), "hello");
+
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(5)));
+        assertFalse(service.cancel(summary.id()));
     }
 
     @Test
@@ -331,6 +428,7 @@ class RunServiceTest {
 
         private final CountDownLatch completion = new CountDownLatch(1); // 异步完成信号
         private volatile Throwable failure; // 异步失败原因
+        private final List<SentEvent> sentEvents = new CopyOnWriteArrayList<>(); // 已发送事件
         private final List<Runnable> completionCallbacks = new CopyOnWriteArrayList<>(); // 完成回调
         private final List<Runnable> timeoutCallbacks = new CopyOnWriteArrayList<>(); // 超时回调
         private final List<Consumer<Throwable>> errorCallbacks = new CopyOnWriteArrayList<>(); // 错误回调
@@ -341,7 +439,21 @@ class RunServiceTest {
 
         @Override
         public void send(SseEventBuilder builder) {
-            // 事件内容由 SseStreamSinkTest 验证，这里只需观察异步生命周期。
+            String eventName = null;
+            Object payload = null;
+            for (SseEmitter.DataWithMediaType part : builder.build()) {
+                if (part.getData() instanceof String text && text.startsWith("event:")) {
+                    eventName = text.lines()
+                            .findFirst()
+                            .orElseThrow()
+                            .substring("event:".length());
+                } else if (payload == null && !String.valueOf(part.getData()).isBlank()) {
+                    payload = part.getData();
+                }
+            }
+            if (eventName != null) {
+                sentEvents.add(new SentEvent(eventName, payload));
+            }
         }
 
         @Override
@@ -385,5 +497,11 @@ class RunServiceTest {
         private boolean awaitCompletion(Duration timeout) throws InterruptedException {
             return completion.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
         }
+
+        private List<SentEvent> sentEvents() {
+            return sentEvents;
+        }
     }
+
+    private record SentEvent(String name, Object data) {}
 }

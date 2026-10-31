@@ -11,6 +11,7 @@ import { API_BASE, ApiError } from './http';
  *   tool     -> { callId, toolName, argumentsJson }
  *   tool_result -> { callId, content, isError, durationMs }
  *   approval -> { callId, toolName, argumentsJson, reversibility, timeoutSeconds }
+ *   aborted  -> { reason }
  *   done     -> "STOP" | "LENGTH" | "ERROR"
  *   error    -> 纯文本
  */
@@ -42,12 +43,16 @@ export interface StreamApproval {
 /** 模型流结束的原因。 */
 export type StopReason = 'STOP' | 'LENGTH' | 'ERROR';
 
+/** 运行中止原因。 */
+export type AbortReason = 'cancelled' | 'max-steps';
+
 /** 流打开期间调用的回调，均为可选。 */
 export interface StreamHandlers {
   onDelta?: (delta: string) => void;
   onTool?: (call: StreamToolCall) => void;
   onToolResult?: (result: StreamToolResult) => void;
   onApproval?: (approval: StreamApproval) => void;
+  onAborted?: (reason: AbortReason) => void;
   onDone?: (reason: StopReason) => void;
   onError?: (message: string) => void;
 }
@@ -120,6 +125,9 @@ function dispatchFrame(frame: string, handlers: StreamHandlers): void {
       break;
     case 'approval':
       handlers.onApproval?.(JSON.parse(parsed.data) as StreamApproval);
+      break;
+    case 'aborted':
+      handlers.onAborted?.((JSON.parse(parsed.data) as { reason: AbortReason }).reason);
       break;
     case 'done':
       handlers.onDone?.(JSON.parse(parsed.data) as StopReason);

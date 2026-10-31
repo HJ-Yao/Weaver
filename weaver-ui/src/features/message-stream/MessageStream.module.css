@@ -61,6 +61,13 @@
   animation: blink 1s steps(2, start) infinite;
 }
 
+.stopped {
+  margin-left: var(--space-2);
+  color: var(--faint);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
 @keyframes blink {
   to {
     visibility: hidden;

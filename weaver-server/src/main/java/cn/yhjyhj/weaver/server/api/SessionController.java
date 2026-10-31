@@ -109,6 +109,22 @@ public class SessionController {
                 .body(runService.run(id, request.content()));
     }
 
+    /**
+     * 请求中止会话当前运行。
+     *
+     * @param id 会话标识
+     * @return 204 无响应体
+     * @throws ResponseStatusException 会话不存在或没有活动运行时返回 404
+     */
+    @PostMapping("/{id}/run/cancel")
+    public ResponseEntity<Void> cancel(@PathVariable("id") String id) {
+        requireSession(id);
+        if (!runService.cancel(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "no active run");
+        }
+        return ResponseEntity.noContent().build();
+    }
+
     private SessionSummary requireSession(String id) {
         return sessions.find(id).orElseThrow(() -> notFound(id));
     }

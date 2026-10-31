@@ -3,7 +3,13 @@ import { sessionApi } from '@/shared/api/sessions';
 import { streamMessage } from '@/shared/api/stream';
 import { IS_MOCK } from '@/shared/config/runtime';
 import { transcriptFromSnapshot } from './model';
-import type { ApprovalItem, MessageItem, SessionSummary, ToolCallItem, TranscriptItem } from './model';
+import type {
+  ApprovalItem,
+  MessageItem,
+  SessionSummary,
+  ToolCallItem,
+  TranscriptItem,
+} from './model';
 
 /**
  * 会话状态。
@@ -40,6 +46,8 @@ interface SessionState {
   /** 创建新会话并将其设为当前会话。 */
   createSession: (title?: string) => Promise<void>;
   sendMessage: (content: string) => void;
+  /** 请求中止当前运行；真实模式等待服务端通过 SSE 确认。 */
+  cancelRun: () => void;
   resolveApproval: (callId: string, approved: boolean) => void;
   toggleToolExpanded: (callId: string) => void;
 }
@@ -309,6 +317,12 @@ export const useSessionStore = create<SessionState>()((set, get) => {
           };
           set((state) => ({ transcript: [...state.transcript, approvalItem] }));
         },
+        onAborted: () => {
+          updateItem(reply.id, (item) =>
+            item.kind === 'message' ? { ...item, streaming: false, stopped: true } : item,
+          );
+          set({ running: false });
+        },
         onDone: () => {
           updateItem(reply.id, (item) =>
             item.kind === 'message' ? { ...item, streaming: false } : item,
@@ -329,6 +343,18 @@ export const useSessionStore = create<SessionState>()((set, get) => {
         );
         set({ running: false });
       });
+    },
+
+    cancelRun: () => {
+      if (IS_MOCK) {
+        set({ running: false });
+        return;
+      }
+
+      const sessionId = get().activeSessionId;
+      if (sessionId) {
+        void sessionApi.cancelRun(sessionId).catch(() => undefined);
+      }
     },
 
     resolveApproval: (callId, approved) => {

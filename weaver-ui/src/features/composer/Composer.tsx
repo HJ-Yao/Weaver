@@ -45,6 +45,7 @@ const MODELS: DropdownOption[] = [
  */
 export function Composer() {
   const sendMessage = useSessionStore((state) => state.sendMessage);
+  const cancelRun = useSessionStore((state) => state.cancelRun);
   const running = useSessionStore((state) => state.running);
   const approvalMode = useUiStore((state) => state.approvalMode);
   const cycleApprovalMode = useUiStore((state) => state.cycleApprovalMode);
@@ -67,6 +68,14 @@ export function Composer() {
     if (!draft.trim() || running) return;
     sendMessage(draft);
     setDraft('');
+  };
+
+  const onPrimaryAction = () => {
+    if (running) {
+      cancelRun();
+      return;
+    }
+    submit();
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -145,10 +154,10 @@ export function Composer() {
           <button
             type="button"
             className={styles.send}
-            disabled={running || !draft.trim()}
-            onClick={submit}
+            disabled={!running && !draft.trim()}
+            onClick={onPrimaryAction}
           >
-            发送
+            {running ? '停止' : '发送'}
           </button>
         </span>
       </div>

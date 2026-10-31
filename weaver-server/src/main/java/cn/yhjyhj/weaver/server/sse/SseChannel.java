@@ -1,11 +1,14 @@
 package cn.yhjyhj.weaver.server.sse;
 
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Objects;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /** 将一次 HTTP 响应绑定为共享同一发送边界的实时输出与审批通道。 */
+@Slf4j
 public final class SseChannel {
 
     private final SseSender sender; // 流式输出与审批事件共用的响应发送器
@@ -43,6 +46,26 @@ public final class SseChannel {
      */
     public SseApprovalGate approvalGate(Duration timeout) {
         return new SseApprovalGate(sender, timeout);
+    }
+
+    /**
+     * 发送任意具名事件。
+     *
+     * <p>与流式输出和审批共用同一把发送锁。客户端断开时只记录调试日志，不影响运行收尾。
+     *
+     * @param eventName SSE 事件名
+     * @param data 可序列化的事件载荷
+     */
+    public void emit(String eventName, Object data) {
+        Objects.requireNonNull(eventName, "eventName");
+        Objects.requireNonNull(data, "data");
+        try {
+            synchronized (sender) {
+                sender.send(eventName, data);
+            }
+        } catch (IOException exception) {
+            log.debug("failed to send SSE event: event={}", eventName, exception);
+        }
     }
 
     /**

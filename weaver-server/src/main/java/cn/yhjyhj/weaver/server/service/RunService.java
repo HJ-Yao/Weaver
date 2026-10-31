@@ -14,6 +14,8 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -33,7 +35,7 @@ public final class RunService {
     private final int maxSteps; // 单轮运行的最大步数
     private final Duration approvalTimeout; // 单次交互审批等待上限
     private final Supplier<SseEmitter> emitterFactory; // 单次请求的响应发射器工厂
-    private final Map<String, SseApprovalGate> activeGates = // 每会话当前运行闸门
+    private final Map<String, ActiveRun> activeRuns = // 每会话当前活动运行
             new ConcurrentHashMap<>();
 
     /**
@@ -72,19 +74,20 @@ public final class RunService {
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND, "session not found: " + sessionId);
         }
-        if (activeGates.containsKey(sessionId)) {
+        if (activeRuns.containsKey(sessionId)) {
             throw conflict(sessionId);
         }
 
         SseEmitter emitter = emitterFactory.get();
         SseChannel channel = SseChannel.bind(emitter);
         SseApprovalGate gate = channel.approvalGate(approvalTimeout);
+        ActiveRun activeRun = new ActiveRun(gate);
         emitter.onCompletion(gate::cancelAll);
         emitter.onTimeout(gate::cancelAll);
         emitter.onError(ignored -> gate.cancelAll());
 
         // 原子占位保证并发请求只有一个能启动；失败者的 gate 不会等待任何审批。
-        if (activeGates.putIfAbsent(sessionId, gate) != null) {
+        if (activeRuns.putIfAbsent(sessionId, activeRun) != null) {
             gate.cancelAll();
             throw conflict(sessionId);
         }
@@ -93,15 +96,36 @@ public final class RunService {
             Thread.ofVirtual()
                     .name("weaver-run-" + sessionId)
                     .start(() -> {
+                        Throwable failure = null;
                         try {
-                            execute(sessionId, content, channel, emitter, gate);
+                            execute(sessionId, content, channel, activeRun);
+                        } catch (Exception exception) {
+                            failure = exception;
                         } finally {
-                            activeGates.remove(sessionId, gate);
+                            // 先撤销活动运行，再完成响应；客户端收到结束时取消必然返回 false。
+                            activeRuns.remove(sessionId, activeRun);
                             gate.cancelAll();
                         }
+                        if (failure == null) {
+                            emitter.complete();
+                            return;
+                        }
+
+                        // 运行失败要让客户端和服务端都能看到：先推 error，再结束响应。
+                        log.error("run failed: session={}", sessionId, failure);
+                        try {
+                            channel.streamSink().onError(String.valueOf(failure.getMessage()));
+                        } catch (RuntimeException sendFailure) {
+                            // 客户端可能已经断开；错误已记录，清理路径不再抛出。
+                            log.debug(
+                                    "failed to send error event: session={}",
+                                    sessionId,
+                                    sendFailure);
+                        }
+                        emitter.completeWithError(failure);
                     });
         } catch (RuntimeException | Error exception) {
-            activeGates.remove(sessionId, gate);
+            activeRuns.remove(sessionId, activeRun);
             gate.cancelAll();
             throw exception;
         }
@@ -117,40 +141,64 @@ public final class RunService {
      * @return 找到并接受决策时返回 true
      */
     public boolean resolveApproval(String sessionId, String callId, boolean approved) {
-        SseApprovalGate gate = activeGates.get(sessionId);
-        return gate != null && gate.resolve(callId, approved);
+        ActiveRun activeRun = activeRuns.get(sessionId);
+        return activeRun != null && activeRun.gate().resolve(callId, approved);
+    }
+
+    /**
+     * 请求中止指定会话的活动运行。
+     *
+     * <p>取消会立即传递给 {@link RunLoop}，但循环只会在当前步骤结束后的边界检查中退出，
+     * 已在途的模型 HTTP 请求不会被强行中断。
+     *
+     * @param sessionId 会话标识
+     * @return 找到并标记活动运行时返回 true；没有活动运行时返回 false
+     */
+    public boolean cancel(String sessionId) {
+        ActiveRun activeRun = activeRuns.get(sessionId);
+        if (activeRun == null) {
+            return false;
+        }
+
+        activeRun.cancelRequested().set(true);
+        RunLoop loop = activeRun.loop().get();
+        if (loop != null) {
+            loop.cancel();
+        }
+        return true;
     }
 
     private void execute(
             String sessionId,
             String content,
             SseChannel channel,
-            SseEmitter emitter,
-            SseApprovalGate gate) {
+            ActiveRun activeRun) {
         SseStreamSink streamSink = channel.streamSink();
-        try {
-            new RunLoop(
-                            model,
-                            channel.withToolResultRelay(eventStore),
-                            new RunLoopConfig(
-                                    maxSteps,
-                                    streamSink,
-                                    tools,
-                                    approvalPolicy,
-                                    gate,
-                                    approvalGrants))
-                    .run(sessionId, content);
-            emitter.complete();
-        } catch (Exception exception) {
-            // 运行失败要让客户端和服务端都能看到：先推 error 事件，再结束响应。
-            log.error("run failed: session={}", sessionId, exception);
-            try {
-                streamSink.onError(String.valueOf(exception.getMessage()));
-            } catch (RuntimeException sendFailure) {
-                // 客户端可能已经断开；错误已记录，清理路径不再抛出。
-                log.debug("failed to send error event: session={}", sessionId, sendFailure);
+        RunLoop loop = new RunLoop(
+                model,
+                channel.withToolResultRelay(eventStore),
+                new RunLoopConfig(
+                        maxSteps,
+                        streamSink,
+                        tools,
+                        approvalPolicy,
+                        activeRun.gate(),
+                        approvalGrants));
+        activeRun.loop().set(loop);
+
+        // 先挂接再检查取消位，覆盖 HTTP 取消在 loop 创建前到达的窗口。
+        if (activeRun.cancelRequested().get()) {
+            loop.cancel();
+        }
+        loop.run(sessionId, content);
+
+        if (loop.finalPhase().aborted()) {
+            boolean cancelled = activeRun.cancelRequested().get();
+            // 只有用户取消和步数上限才算「中止」；循环内部异常同样会置 aborted，
+            // 但那种情况已由 error 事件表达，不能再补一个误导性的 aborted。
+            if (cancelled || loop.finalPhase().step() >= maxSteps) {
+                channel.emit("aborted", new AbortedEvent(cancelled ? "cancelled" : "max-steps"));
             }
-            emitter.completeWithError(exception);
         }
     }
 
@@ -158,4 +206,34 @@ public final class RunService {
         return new ResponseStatusException(
                 HttpStatus.CONFLICT, "run already active: " + sessionId);
     }
+
+    /** 单个会话的活动运行及其取消状态。 */
+    private static final class ActiveRun {
+
+        /** 等待用户审批的 SSE 闸门。 */
+        private final SseApprovalGate gate;
+        /** 是否由用户主动请求取消，用于区分用户取消与步数上限。 */
+        private final AtomicBoolean cancelRequested = new AtomicBoolean();
+        /** 虚拟线程创建后挂接的运行循环；挂接前取消由取消位兜底。 */
+        private final AtomicReference<RunLoop> loop = new AtomicReference<>();
+
+        private ActiveRun(SseApprovalGate gate) {
+            this.gate = Objects.requireNonNull(gate, "gate");
+        }
+
+        private SseApprovalGate gate() {
+            return gate;
+        }
+
+        private AtomicBoolean cancelRequested() {
+            return cancelRequested;
+        }
+
+        private AtomicReference<RunLoop> loop() {
+            return loop;
+        }
+    }
+
+    /** 发送给前端的运行中止原因。 */
+    private record AbortedEvent(String reason) {}
 }

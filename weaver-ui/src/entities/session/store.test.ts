@@ -16,6 +16,7 @@ vi.mock('@/shared/api/sessions', () => ({
     detail: vi.fn(),
     remove: vi.fn(),
     resolveApproval: vi.fn(),
+    cancelRun: vi.fn(),
   },
 }));
 
@@ -208,5 +209,38 @@ describe('useSessionStore real API mode', () => {
       resultText: 'exit code 1',
     });
     expect(transcript).toHaveLength(4);
+  });
+
+  it('requests cancellation for the active real-mode run', () => {
+    mockedSessionApi.cancelRun.mockResolvedValue(undefined);
+    useSessionStore.setState({ activeSessionId: firstSession.id });
+
+    useSessionStore.getState().cancelRun();
+
+    expect(mockedSessionApi.cancelRun).toHaveBeenCalledWith(firstSession.id);
+  });
+
+  it('marks the streaming reply stopped when the server reports an abort', () => {
+    let handlers: StreamHandlers | undefined;
+    mockedStreamMessage.mockImplementation((_sessionId, _content, streamHandlers) => {
+      handlers = streamHandlers;
+      return new Promise<void>(() => {});
+    });
+    useSessionStore.setState({ activeSessionId: firstSession.id });
+
+    useSessionStore.getState().sendMessage('x');
+    handlers?.onDelta?.('partial');
+    handlers?.onAborted?.('cancelled');
+
+    const state = useSessionStore.getState();
+    const reply = state.transcript.find(
+      (item) => item.kind === 'message' && item.role === 'assistant',
+    );
+    expect(reply).toMatchObject({
+      content: 'partial',
+      streaming: false,
+      stopped: true,
+    });
+    expect(state.running).toBe(false);
   });
 });

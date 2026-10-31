@@ -75,6 +75,10 @@ export const sessionApi = {
   /** GET /sessions/{id}：元数据及回放快照。 */
   detail: (id: string) => request<SessionDetailDto>(`/sessions/${encodeURIComponent(id)}`),
 
+  /** POST /sessions/{id}/run/cancel：请求中止当前运行。 */
+  cancelRun: (id: string) =>
+    request<void>(`/sessions/${encodeURIComponent(id)}/run/cancel`, { method: 'POST' }),
+
   /** DELETE /sessions/{id}：删除会话。 */
   remove: (id: string) =>
     request<void>(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),

@@ -1,6 +1,7 @@
 package cn.yhjyhj.weaver.server.api;
 
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -136,5 +137,35 @@ class SessionControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"content\":\"\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void cancelsActiveRunWithNoContentResponse() throws Exception {
+        when(sessionService.find("session-1")).thenReturn(Optional.of(SUMMARY));
+        when(runService.cancel("session-1")).thenReturn(true);
+
+        mockMvc.perform(post("/api/sessions/session-1/run/cancel"))
+                .andExpect(status().isNoContent());
+
+        verify(runService).cancel("session-1");
+    }
+
+    @Test
+    void returnsNotFoundWhenCancellingWithoutActiveRun() throws Exception {
+        when(sessionService.find("session-1")).thenReturn(Optional.of(SUMMARY));
+        when(runService.cancel("session-1")).thenReturn(false);
+
+        mockMvc.perform(post("/api/sessions/session-1/run/cancel"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void returnsNotFoundWhenCancellingUnknownSession() throws Exception {
+        when(sessionService.find("missing")).thenReturn(Optional.empty());
+
+        mockMvc.perform(post("/api/sessions/missing/run/cancel"))
+                .andExpect(status().isNotFound());
+
+        verify(runService, never()).cancel("missing");
     }
 }

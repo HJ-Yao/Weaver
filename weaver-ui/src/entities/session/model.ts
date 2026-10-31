@@ -27,6 +27,8 @@ export interface MessageItem {
   seq?: number;
   /** 模型增量仍在到达时为 `true`。 */
   streaming?: boolean;
+  /** 本轮回复被用户中止或达到步数上限时为 `true`。 */
+  stopped?: boolean;
 }
 
 /** 单次工具调用的生命周期。 */
