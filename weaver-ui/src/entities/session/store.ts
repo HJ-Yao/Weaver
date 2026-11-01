@@ -140,6 +140,18 @@ export const useSessionStore = create<SessionState>()((set, get) => {
     }));
   };
 
+  /** 运行结束后刷新事件序号；失败不影响运行结果，保留旧值。 */
+  const refreshLastSeq = async (sessionId: string) => {
+    try {
+      const detail = await sessionApi.detail(sessionId);
+      if (get().activeSessionId === sessionId) {
+        set({ lastSeq: detail.snapshot.lastSeq });
+      }
+    } catch {
+      // 服务端不可用或接口异常时保持旧序号即可，不弹错误。
+    }
+  };
+
   return {
     sessions: IS_MOCK ? demoSessions : [],
     activeSessionId: IS_MOCK ? (demoSessions[0]?.id ?? null) : null,
@@ -351,14 +363,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
         .finally(() => {
           // 服务端关闭响应 = 本次运行真正结束，此时才允许再次发送。
           set({ running: false });
-          void sessionApi
-            .detail(sessionId)
-            .then((detail) => {
-              if (get().activeSessionId === sessionId) {
-                set({ lastSeq: detail.snapshot.lastSeq });
-              }
-            })
-            .catch(() => undefined);
+          void refreshLastSeq(sessionId);
         });
     },
 

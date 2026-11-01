@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useSessionStore } from '@/entities/session/store';
 import type { MessageItem } from '@/entities/session/model';
 import { ApprovalCard } from '@/features/approval/ApprovalCard';
+import { Markdown } from '@/features/markdown/Markdown';
 import { ToolCard } from '@/features/tool-call/ToolCard';
 import styles from './MessageStream.module.css';
 
@@ -51,7 +52,7 @@ function MessageBubble({ item }: { item: MessageItem }) {
         </div>
       )}
       <div className={`${styles.bubble} ${item.streaming ? styles.streaming : ''}`}>
-        {item.content}
+        {isUser ? item.content : <Markdown content={item.content} />}
         {item.stopped && <span className={styles.stopped}>已停止</span>}
       </div>
     </article>
