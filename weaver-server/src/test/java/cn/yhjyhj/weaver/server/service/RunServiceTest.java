@@ -230,6 +230,57 @@ class RunServiceTest {
     }
 
     @Test
+    void cancelsNeverEndingModelStreamAndCompletesWithAbortedEvent() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(store);
+        SessionSummary summary = sessions.create("Streaming cancel");
+        RecordingEmitter emitter = new RecordingEmitter();
+        CountDownLatch modelStarted = new CountDownLatch(1);
+        AtomicBoolean subscriptionCancelled = new AtomicBoolean();
+        ModelClient neverEndingModel = request -> subscriber -> {
+            subscriber.onSubscribe(new Flow.Subscription() {
+                private final AtomicBoolean emitted = new AtomicBoolean();
+
+                @Override
+                public void request(long count) {
+                    if (emitted.compareAndSet(false, true)) {
+                        subscriber.onNext(new StreamChunk.Text("partial"));
+                    }
+                }
+
+                @Override
+                public void cancel() {
+                    subscriptionCancelled.set(true);
+                }
+            });
+            modelStarted.countDown();
+        };
+        RunService service = new RunService(dependencies(
+                sessions,
+                store,
+                neverEndingModel,
+                ToolRegistry.empty(),
+                30,
+                () -> emitter));
+
+        service.run(summary.id(), "hello");
+        assertTrue(modelStarted.await(2, TimeUnit.SECONDS));
+        assertTrue(service.cancel(summary.id()));
+
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(2)));
+        assertTrue(subscriptionCancelled.get());
+        SessionSnapshot snapshot = SessionEvents.replay(store.from(summary.id(), 0L));
+        assertTrue(snapshot.aborted());
+        SentEvent aborted = emitter.sentEvents().stream()
+                .filter(event -> event.name().equals("aborted"))
+                .findFirst()
+                .orElseThrow();
+        Map<String, Object> payload = JSON.convertValue(
+                aborted.data(), new TypeReference<>() {});
+        assertEquals("cancelled", payload.get("reason"));
+    }
+
+    @Test
     void doesNotEmitAbortedWhenTheLoopFailsInternally() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
         SessionService sessions = new SessionService(store);

@@ -236,6 +236,20 @@ class RunLoopTest {
     }
 
     @Test
+    void preservesCancellationRequestedBeforeRunAndDoesNotCallModel() {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        ScriptedModelClient model = new ScriptedModelClient(List.of(), null);
+        RunLoop runLoop = new RunLoop(model, store);
+        runLoop.cancel();
+
+        runLoop.run(SESSION_ID, "你好");
+
+        assertTrue(model.requests.isEmpty());
+        assertEquals(new SessionEvent.RunFinished(true), events(store).getLast());
+        assertTrue(runLoop.finalPhase() instanceof Phase.Maintenance);
+    }
+
+    @Test
     void convertsModelErrorIntoAbortedRunWithoutThrowing() {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
         ScriptedModelClient model = new ScriptedModelClient(List.of(response(

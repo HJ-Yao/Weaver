@@ -31,6 +31,8 @@ public final class RunContext {
     private final String sessionId; // 当前会话标识
     private final EventSink sink; // 当前运行的事件出口
     private final StreamSink streamSink; // 当前运行的实时输出出口
+    /** 本步可观察的取消信号。 */
+    private final Cancellation cancellation;
     /** 本步开始前从事件流回放得到的模型历史。 */
     private List<ModelMessage> history = List.of();
     private Intent intent; // 本步识别出的用户意图
@@ -48,7 +50,7 @@ public final class RunContext {
      * @param sink 本步的事件出口
      */
     public RunContext(String sessionId, EventSink sink) {
-        this(sessionId, sink, NO_OP_STREAM_SINK);
+        this(sessionId, sink, NO_OP_STREAM_SINK, Cancellation.never());
     }
 
     /**
@@ -59,9 +61,26 @@ public final class RunContext {
      * @param streamSink 本步的实时流式输出出口
      */
     public RunContext(String sessionId, EventSink sink, StreamSink streamSink) {
+        this(sessionId, sink, streamSink, Cancellation.never());
+    }
+
+    /**
+     * 创建带取消信号的单步上下文。
+     *
+     * @param sessionId 当前会话标识
+     * @param sink 本步的事件出口
+     * @param streamSink 本步的实时流式输出出口
+     * @param cancellation 本步可观察的取消信号
+     */
+    public RunContext(
+            String sessionId,
+            EventSink sink,
+            StreamSink streamSink,
+            Cancellation cancellation) {
         this.sessionId = sessionId;
         this.sink = sink;
         this.streamSink = streamSink;
+        this.cancellation = cancellation;
     }
 
     /**

@@ -48,7 +48,8 @@ public final class ReasonNode extends AbstractRunNode {
      *
      * <p>输入是 {@link RunRequest#input()}、{@link RunContext#getHistory()} 的结构化历史，
      * 以及注册表声明的工具清单。模型流会被同步订阅：文本同时写入上下文和实时输出端，
-     * 工具调用进入待执行列表；非空最终文本作为一条 assistant 消息写入事件流。
+     * 工具调用进入待执行列表；非空最终文本作为一条 assistant 消息写入事件流。收到取消时
+     * 立即取消模型订阅，保留取消前已展示的文本，由 RunLoop 在步骤返回后判定中止。
      *
      * <p>本方法始终返回 {@code null}，由 {@link #getNext(RunRequest, RunContext)}
      * 根据是否收集到工具调用决定进入 ActNode 或 ObserveNode。模型流中的错误会标记
@@ -107,11 +108,22 @@ public final class ReasonNode extends AbstractRunNode {
         @Override
         public void onSubscribe(Flow.Subscription subscription) {
             this.subscription = subscription;
+            context.getCancellation().onCancel(() -> {
+                try {
+                    subscription.cancel();
+                } finally {
+                    // 即使上游取消抛错，也必须释放正在等待模型流结束的步骤线程。
+                    completion.complete(null);
+                }
+            });
             subscription.request(1);
         }
 
         @Override
         public void onNext(StreamChunk chunk) {
+            if (context.getCancellation().isCancelled()) {
+                return;
+            }
             if (chunk instanceof StreamChunk.Text delta) {
                 // 累积文本用于最终 assistant 事件，实时转发则让调用方能边生成边展示。
                 text.append(delta.delta());

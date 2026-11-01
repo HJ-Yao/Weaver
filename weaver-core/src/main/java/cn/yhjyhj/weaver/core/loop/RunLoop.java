@@ -4,20 +4,20 @@ import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.loop.chain.StrategyHandler;
 import cn.yhjyhj.weaver.core.loop.context.EventSink;
+import cn.yhjyhj.weaver.core.loop.context.RunCancellation;
 import cn.yhjyhj.weaver.core.loop.context.RunContext;
 import cn.yhjyhj.weaver.core.loop.context.RunRequest;
 import cn.yhjyhj.weaver.core.loop.context.StepResult;
 import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.phase.Phase;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * 直线驱动单步策略链的运行循环。
  *
- * <p>线程契约：一个实例同一时间只应执行一个 {@link #run(String, String)}；
- * 并发会话请各自创建实例。{@link #cancel()} 可以从其他线程调用。
+ * <p>线程契约：一个实例只调用一次 {@link #run(String, String)}；多次运行或并发会话
+ * 请各自创建实例。{@link #cancel()} 可以从其他线程调用。
  */
 @Slf4j
 public final class RunLoop {
@@ -28,8 +28,8 @@ public final class RunLoop {
     private final ModelClient model; // 模型调用边界
     private final SessionEventStore store; // 会话事实源
     private final RunLoopConfig config; // 本次运行的步数、流式出口与协作者
-    /** 当前运行是否收到取消请求；每次 run 开始时重置。 */
-    private final AtomicBoolean cancelled = new AtomicBoolean();
+    /** 当前运行实例的取消信号；实例只服务一次 run。 */
+    private final RunCancellation cancellation = new RunCancellation();
     /** 最近一次运行收敛后的阶段；run 返回后由调用线程读取。 */
     private volatile Phase finalPhase;
 
@@ -75,8 +75,6 @@ public final class RunLoop {
      * @param input 本轮用户输入
      */
     public void run(String sessionId, String input) {
-        // 每次 run 是独立执行，必须清除上一次运行留下的取消位。
-        cancelled.set(false);
         EventSink sink = event -> store.append(sessionId, event);
         sink.emit(new SessionEvent.MessageAdded(SessionEvent.Role.USER, input));
         StrategyHandler<RunRequest, RunContext, StepResult> root =
@@ -92,12 +90,13 @@ public final class RunLoop {
 
         try {
             // 步数从 0 开始计数，取消和上限都在执行下一步前检查。
-            while (phase.step() < config.maxSteps() && !cancelled.get()) {
-                RunContext context = new RunContext(sessionId, sink, config.streamSink());
+            while (phase.step() < config.maxSteps() && !cancellation.isCancelled()) {
+                RunContext context =
+                        new RunContext(sessionId, sink, config.streamSink(), cancellation);
                 StepResult result = root.apply(
                         new RunRequest(sessionId, input, phase.step()), context);
                 // 取消可能发生在单步内部，需在推进前优先识别并记录中止。
-                if (cancelled.get() || result.aborted()) {
+                if (cancellation.isCancelled() || result.aborted()) {
                     aborted = true;
                     break;
                 }
@@ -107,7 +106,9 @@ public final class RunLoop {
                 phase = phase.nextStep();
             }
             // 自然结束后再检查取消与上限，覆盖循环退出时刚好触发的边界条件。
-            aborted = aborted || cancelled.get() || phase.step() >= config.maxSteps();
+            aborted = aborted
+                    || cancellation.isCancelled()
+                    || phase.step() >= config.maxSteps();
         } catch (Exception exception) {
             // 统一把异常收敛为中止，保证每次 run 都有终态和 RunFinished 事实。
             log.error("run failed: session={}", sessionId, exception);
@@ -117,9 +118,9 @@ public final class RunLoop {
         sink.emit(new SessionEvent.RunFinished(aborted));
     }
 
-    /** 请求取消当前运行；该请求会在运行循环的下一次边界检查时生效。 */
+    /** 请求取消当前运行；立即触发已注册回调，并保证循环在下一步判定中止。 */
     public void cancel() {
-        cancelled.set(true);
+        cancellation.cancel();
     }
 
     /**
