@@ -28,7 +28,9 @@ public final class SseStreamSink implements StreamSink {
     /** {@inheritDoc} */
     @Override
     public void onDelta(String delta) {
-        send("delta", delta);
+        // SSE 规定 data 字段开头的单个空格会被解析器删除。模型分片常以空格开头
+        // （" 线程模型"），直接发送会破坏 Markdown 语法，因此包成 JSON 保留原文。
+        send("delta", new DeltaEvent(delta));
     }
 
     /** {@inheritDoc} */
@@ -59,6 +61,9 @@ public final class SseStreamSink implements StreamSink {
             throw new UncheckedIOException("failed to send SSE event: " + eventName, exception);
         }
     }
+
+    /** 一次文本分片；用对象承载以避开 SSE 对行首空格的裁剪。 */
+    record DeltaEvent(String text) {}
 
     private static SseSender senderFor(SseEmitter emitter) {
         SseEmitter requiredEmitter = Objects.requireNonNull(emitter, "emitter");

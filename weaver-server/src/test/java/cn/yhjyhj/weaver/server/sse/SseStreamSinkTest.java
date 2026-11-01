@@ -32,10 +32,23 @@ class SseStreamSinkTest {
 
         assertEquals(
                 List.of(
-                        new SentEvent("delta", "hello"),
+                        new SentEvent("delta", new SseStreamSink.DeltaEvent("hello")),
                         new SentEvent("tool", call),
                         new SentEvent("done", StreamChunk.StopReason.STOP),
                         new SentEvent("error", "boom")),
+                events);
+    }
+
+    @Test
+    void preservesLeadingWhitespaceInDeltaPayload() {
+        List<SentEvent> events = new ArrayList<>();
+        SseStreamSink sink = new SseStreamSink(
+                (eventName, data) -> events.add(new SentEvent(eventName, data)));
+
+        sink.onDelta(" 线程模型");
+
+        assertEquals(
+                List.of(new SentEvent("delta", new SseStreamSink.DeltaEvent(" 线程模型"))),
                 events);
     }
 

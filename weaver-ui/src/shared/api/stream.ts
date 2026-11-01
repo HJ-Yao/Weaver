@@ -7,7 +7,7 @@ import { API_BASE, ApiError } from './http';
  * 请求体，因此用 `fetch` 加一个最小 SSE 解析器消费响应。
  * 事件名和载荷与 `SseStreamSink` / `SseApprovalGate` 对应：
  *
- *   delta    -> 纯文本分片
+ *   delta    -> { text }（用对象承载，避免 SSE 裁掉行首空格）
  *   tool     -> { callId, toolName, argumentsJson }
  *   tool_result -> { callId, content, isError, durationMs }
  *   approval -> { callId, toolName, argumentsJson, reversibility, timeoutSeconds }
@@ -115,7 +115,8 @@ function dispatchFrame(frame: string, handlers: StreamHandlers): void {
 
   switch (parsed.event) {
     case 'delta':
-      handlers.onDelta?.(parsed.data);
+      // 服务端把分片包成 JSON：SSE 会删除 data 字段开头的单个空格，Markdown 依赖它。
+      handlers.onDelta?.((JSON.parse(parsed.data) as { text: string }).text);
       break;
     case 'tool':
       handlers.onTool?.(JSON.parse(parsed.data) as StreamToolCall);
