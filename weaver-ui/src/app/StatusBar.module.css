@@ -20,6 +20,10 @@
   background: var(--green);
 }
 
+.error {
+  background: var(--red);
+}
+
 .sep {
   width: 1px;
   height: 10px;

@@ -32,6 +32,8 @@ interface SessionState {
   activeSessionId: string | null;
   /** 按渲染顺序排列的可见对话。 */
   transcript: TranscriptItem[];
+  /** 当前会话快照中最后一条事件序号；尚未加载时为 `0`。 */
+  lastSeq: number;
   /** 运行期间为 `true`，此时输入区保持禁用。 */
   running: boolean;
   /** 会话列表或详情当前的加载状态。 */
@@ -142,6 +144,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
     sessions: IS_MOCK ? demoSessions : [],
     activeSessionId: IS_MOCK ? (demoSessions[0]?.id ?? null) : null,
     transcript: IS_MOCK ? demoTranscript : [],
+    lastSeq: 0,
     running: false,
     status: IS_MOCK ? 'ready' : 'idle',
     error: null,
@@ -181,7 +184,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
       }
 
       const requestId = ++detailRequestId;
-      set({ activeSessionId: id, error: null });
+      set({ activeSessionId: id, lastSeq: 0, error: null });
 
       try {
         const detail = await sessionApi.detail(id);
@@ -189,6 +192,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
 
         set({
           transcript: transcriptFromSnapshot(detail.snapshot),
+          lastSeq: detail.snapshot.lastSeq,
           status: 'ready',
           error: null,
         });
@@ -347,6 +351,14 @@ export const useSessionStore = create<SessionState>()((set, get) => {
         .finally(() => {
           // 服务端关闭响应 = 本次运行真正结束，此时才允许再次发送。
           set({ running: false });
+          void sessionApi
+            .detail(sessionId)
+            .then((detail) => {
+              if (get().activeSessionId === sessionId) {
+                set({ lastSeq: detail.snapshot.lastSeq });
+              }
+            })
+            .catch(() => undefined);
         });
     },
 
