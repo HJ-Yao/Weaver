@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUiStore } from '@/app/ui-store';
-import { demoDiffFiles } from '@/entities/diff/model';
 import type { DiffFile } from '@/entities/diff/model';
 import { workspaceApi } from '@/shared/api/workspace';
-import { IS_MOCK } from '@/shared/config/runtime';
 import styles from './ContextPanel.module.css';
 
 /** Diff 面板当前展示的数据状态。 */
@@ -13,19 +11,17 @@ type DiffStatus = 'loading' | 'ready' | 'error';
  * 工作区中的变更文件。
  *
  * 点击文件会打开浮层查看器，而不会向聊天中追加内容，
- * 使 transcript 保持为只追加的事件记录。真实模式在挂载时读取工作区接口。
+ * 使 transcript 保持为只追加的事件记录。挂载时读取工作区接口。
  */
 export function DiffPanel() {
   const openDiffViewer = useUiStore((state) => state.openDiffViewer);
-  const [files, setFiles] = useState<DiffFile[]>(IS_MOCK ? demoDiffFiles : []);
-  const [status, setStatus] = useState<DiffStatus>(IS_MOCK ? 'ready' : 'loading');
+  const [files, setFiles] = useState<DiffFile[]>([]);
+  const [status, setStatus] = useState<DiffStatus>('loading');
   const [error, setError] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    if (IS_MOCK) return;
-
     let cancelled = false;
     setStatus('loading');
     setError(null);

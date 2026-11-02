@@ -125,8 +125,6 @@ pages → widgets → features → entities → shared
 
 **M2 — 接真实数据**
 
-- [ ] 会话列表 / 详情接 `GET /api/sessions`（替换 `store.ts` 中的 `demoSessions`）
-- [ ] 发送消息接真实 SSE（`VITE_USE_MOCK=false`），失败态与重连策略
 - [ ] 工作区与模型配置持久化到 `~/.weaver/config.json`
 - [ ] 插件 / 技能目录接后端；公开 / 个人筛选下沉到服务端
 - [ ] token 用量统计（模型客户端解析 usage）

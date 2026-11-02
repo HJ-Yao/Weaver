@@ -13,7 +13,7 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-默认使用内置的演示数据（`VITE_USE_MOCK=false` 之前不会请求后端）。
+前端始终连接后端；启动前请先运行 Weaver 服务端。
 
 ## 常用脚本
 
@@ -30,18 +30,11 @@ npm run dev          # http://localhost:5173
 ## 连接后端
 
 `vite.config.ts` 把 `/api` 代理到 Spring Boot（默认 `http://localhost:8080`）。
-需要在浏览器里跑真实流式会话时：
-
-```bash
-VITE_USE_MOCK=false npm run dev
-```
-
-其他环境变量：
+前端始终通过该代理读取真实会话与 SSE 流。其他环境变量：
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `VITE_API_BASE` | `/api` | REST 基础路径 |
-| `VITE_USE_MOCK` | `true` | 设为 `false` 时走真实 SSE |
 
 ## 目录
 

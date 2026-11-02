@@ -1,7 +1,17 @@
 server:
   port: 8080
 
+# 可选地加载仓库根目录的 .env（由 .env.example 复制而来）。
+# 两个路径分别覆盖「从仓库根启动」（IDE）和「从 weaver-server 启动」（mvn）；
+# 文件不存在时 optional 保证不影响启动。
+spring:
+  config:
+    import:
+      - optional:file:./.env[.properties]
+      - optional:file:../.env[.properties]
+
 weaver:
+  # 以下为兜底默认值；仓库根 .env 中的同名配置优先级更高。
   workspace: ${user.dir}
   max-steps: 50
   store-path: ${user.home}/.weaver/weaver.db

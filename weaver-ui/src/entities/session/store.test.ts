@@ -8,6 +8,7 @@ import { sessionApi } from '@/shared/api/sessions';
 import type { StreamHandlers } from '@/shared/api/stream';
 import { streamMessage } from '@/shared/api/stream';
 import { transcriptFromSnapshot } from './model';
+import { useSessionStore } from './store';
 
 vi.mock('@/shared/api/sessions', () => ({
   sessionApi: {
@@ -24,12 +25,9 @@ vi.mock('@/shared/api/stream', () => ({
   streamMessage: vi.fn(),
 }));
 
-// store 在模块加载时只读取一次模式，因此必须先固定环境，再动态导入真实模式单例。
-vi.stubEnv('VITE_USE_MOCK', 'false');
-const { useSessionStore } = await import('./store');
-
 const mockedSessionApi = vi.mocked(sessionApi);
 const mockedStreamMessage = vi.mocked(streamMessage);
+const initialSessionState = useSessionStore.getState();
 
 const emptySnapshot: SessionSnapshotDto = {
   messages: [],
@@ -67,13 +65,26 @@ beforeEach(() => {
     sessions: [],
     activeSessionId: null,
     transcript: [],
+    lastSeq: 0,
     status: 'idle',
     error: null,
     running: false,
   });
 });
 
-describe('useSessionStore real API mode', () => {
+describe('useSessionStore', () => {
+  it('starts with an empty real-data state', () => {
+    expect(initialSessionState).toMatchObject({
+      sessions: [],
+      activeSessionId: null,
+      transcript: [],
+      lastSeq: 0,
+      running: false,
+      status: 'idle',
+      error: null,
+    });
+  });
+
   it('loads sessions and selects the first session', async () => {
     mockedSessionApi.list.mockResolvedValue([firstSession, secondSession]);
     mockedSessionApi.detail.mockResolvedValue(detailFor(firstSession, 'first transcript'));

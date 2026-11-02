@@ -1,0 +1,22 @@
+# 测试专用配置。
+#
+# 与 src/main/resources/application.yml 同名，测试类路径优先，因此会完全覆盖主配置：
+# 这样开发者根目录的 .env 不会进入测试上下文，测试结果与本地环境无关。
+# 新增必填配置项时，记得同步这里，否则绑定失败会直接暴露出来。
+server:
+  port: 0
+
+weaver:
+  workspace: ${user.dir}
+  max-steps: 50
+  store-path: ${java.io.tmpdir}/weaver-context-test.db
+  approval:
+    timeout-seconds: 300
+  model:
+    protocol: openai-chat-completions
+    base-url: https://api.deepseek.com
+    api-key: ""
+    model: deepseek-chat
+    max-tokens: 4096
+    temperature: 0.7
+    timeout-seconds: 120

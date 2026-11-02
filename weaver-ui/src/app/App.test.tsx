@@ -1,12 +1,76 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionStore } from '@/entities/session/store';
+import type { SessionDetailDto, SessionSummaryDto } from '@/shared/api/sessions';
+import { sessionApi } from '@/shared/api/sessions';
+import type { ServerStatusDto } from '@/shared/api/status';
+import { statusApi } from '@/shared/api/status';
+import { streamMessage } from '@/shared/api/stream';
+import { workspaceApi } from '@/shared/api/workspace';
 import { routes } from './router';
 
-/** 初始 store 快照；每个测试前恢复，确保用例彼此独立。 */
-const initialState = useSessionStore.getState();
+vi.mock('@/shared/api/sessions', () => ({
+  sessionApi: {
+    list: vi.fn(),
+    create: vi.fn(),
+    detail: vi.fn(),
+    remove: vi.fn(),
+    resolveApproval: vi.fn(),
+    cancelRun: vi.fn(),
+  },
+}));
+
+vi.mock('@/shared/api/stream', () => ({
+  streamMessage: vi.fn(),
+}));
+
+vi.mock('@/shared/api/status', () => ({
+  statusApi: {
+    get: vi.fn(),
+  },
+}));
+
+vi.mock('@/shared/api/workspace', () => ({
+  workspaceApi: {
+    diff: vi.fn(),
+  },
+}));
+
+const mockedSessionApi = vi.mocked(sessionApi);
+const mockedStatusApi = vi.mocked(statusApi);
+const mockedStreamMessage = vi.mocked(streamMessage);
+const mockedWorkspaceApi = vi.mocked(workspaceApi);
+
+const connectedStatus: ServerStatusDto = {
+  status: 'ok',
+  storage: 'sqlite',
+  wal: true,
+  workspace: 'F:\\workspace',
+  maxSteps: 20,
+  uptimeSeconds: 12,
+};
+
+const loadedSession: SessionSummaryDto = {
+  id: 'session-live',
+  title: '真实会话',
+  createdAt: '2026-11-02T08:00:00Z',
+};
+
+const loadedDetail: SessionDetailDto = {
+  summary: loadedSession,
+  snapshot: {
+    messages: [
+      { role: 'USER', content: '从后端加载的问题' },
+      { role: 'ASSISTANT', content: '从后端加载的回答' },
+    ],
+    toolCalls: [],
+    approvals: [],
+    aborted: false,
+    lastSeq: 2,
+  },
+};
 
 function renderApp(path = '/') {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
@@ -14,32 +78,55 @@ function renderApp(path = '/') {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   useSessionStore.setState({
-    transcript: initialState.transcript,
-    activeSessionId: initialState.activeSessionId,
+    sessions: [],
+    activeSessionId: null,
+    transcript: [],
+    lastSeq: 0,
     running: false,
+    status: 'idle',
+    error: null,
   });
+  mockedSessionApi.list.mockResolvedValue([]);
+  mockedStatusApi.get.mockResolvedValue(connectedStatus);
+  mockedWorkspaceApi.diff.mockResolvedValue({ files: [], truncated: false });
 });
 
 describe('app shell', () => {
-  it('renders the active session and its transcript', () => {
+  it('loads sessions and their transcript from the API on first render', async () => {
+    mockedSessionApi.list.mockResolvedValue([loadedSession]);
+    mockedSessionApi.detail.mockResolvedValue(loadedDetail);
+
     renderApp();
 
-    expect(screen.getByRole('heading', { name: '审批栈重构' })).toBeInTheDocument();
-    expect(screen.getByText(/规则表不要再靠正则啃 JSON/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '首页' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: loadedSession.title })).toBeInTheDocument();
+    expect(await screen.findByText('从后端加载的问题')).toBeInTheDocument();
+    expect(screen.getByText('从后端加载的回答')).toBeInTheDocument();
+    expect(mockedSessionApi.list).toHaveBeenCalledTimes(1);
+    expect(mockedSessionApi.detail).toHaveBeenCalledWith(loadedSession.id);
   });
 
-  it('appends the user message and the mock reply on Enter', async () => {
+  it('sends the entered message through the stream API and shows the user bubble', async () => {
     const user = userEvent.setup();
+    mockedSessionApi.list.mockResolvedValue([loadedSession]);
+    mockedSessionApi.detail.mockResolvedValue(loadedDetail);
+    mockedStreamMessage.mockResolvedValue(undefined);
+
     renderApp();
 
-    const input = screen.getByLabelText('消息输入框');
+    const input = await screen.findByLabelText('消息输入框');
     await user.type(input, 'hello');
     await user.keyboard('{Enter}');
 
     expect(screen.getByText('hello')).toBeInTheDocument();
-    expect(screen.getByText(/收到。我会先读取相关文件/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(mockedStreamMessage).toHaveBeenCalledWith(
+        loadedSession.id,
+        'hello',
+        expect.any(Object),
+      ),
+    );
     expect(input).toHaveValue('');
   });
 

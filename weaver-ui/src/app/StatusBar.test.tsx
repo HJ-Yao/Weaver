@@ -5,7 +5,9 @@ import { sessionApi } from '@/shared/api/sessions';
 import type { ServerStatusDto } from '@/shared/api/status';
 import { statusApi } from '@/shared/api/status';
 import { streamMessage } from '@/shared/api/stream';
+import { useSessionStore } from '@/entities/session/store';
 import { useUiStore } from './ui-store';
+import { StatusBar } from './StatusBar';
 
 vi.mock('@/shared/api/status', () => ({
   statusApi: {
@@ -22,11 +24,6 @@ vi.mock('@/shared/api/sessions', () => ({
 vi.mock('@/shared/api/stream', () => ({
   streamMessage: vi.fn(),
 }));
-
-// store 在模块加载时读取运行模式，必须先固定真实模式，再导入单例。
-vi.stubEnv('VITE_USE_MOCK', 'false');
-const { useSessionStore } = await import('@/entities/session/store');
-const { StatusBar } = await import('./StatusBar');
 
 const mockedStatusApi = vi.mocked(statusApi);
 const mockedSessionApi = vi.mocked(sessionApi);
