@@ -124,9 +124,11 @@ public final class RuleBasedApprovalPolicy implements ApprovalPolicy {
         }
         String operation = ApprovalRules.operationOf(call.argumentsJson());
         // 已授权操作先于无人值守降级，使同一会话中明确批准过的操作仍可继续。
-        String grantOperation = operation == null ? "*" : operation;
+        if (operation == null) {
+            return base;
+        }
         if (context.grants().isGranted(
-                context.sessionId(), call.toolName(), grantOperation)) {
+                context.sessionId(), call.toolName(), operation)) {
             return new ApprovalResult(
                     ApprovalDecision.ALLOW, "session-granted");
         }

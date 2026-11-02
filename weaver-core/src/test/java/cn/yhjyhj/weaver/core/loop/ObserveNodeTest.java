@@ -25,13 +25,13 @@ class ObserveNodeTest {
     }
 
     @Test
-    void finishesAtLengthUntilContinuationIsImplemented() throws Exception {
+    void continuesWhenModelStopsAtLength() throws Exception {
         RunContext context = context();
         context.setModelDone(true);
         context.setStopReason(StreamChunk.StopReason.LENGTH);
         context.setResponseText("partial");
 
-        assertEquals(new StepResult(true, false, "partial"), apply(context));
+        assertEquals(new StepResult(false, false, "partial"), apply(context));
     }
 
     @Test

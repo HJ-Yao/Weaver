@@ -32,6 +32,9 @@ import org.junit.jupiter.api.Test;
 
 class AnthropicMessagesModelClientTest {
 
+    private static final String SYSTEM_PROMPT =
+            "你是 Weaver，一个用 Java 实现的 AI Agent Harness。被问及身份时以此为准。";
+
     private static final ObjectMapper JSON = new ObjectMapper(); // 校验请求体结构的测试解析器
 
     @Test
@@ -260,6 +263,7 @@ class AnthropicMessagesModelClientTest {
                     URI.create(server.baseUri + "/"),
                     "test-key",
                     "claude-sonnet-4-20250514",
+                    SYSTEM_PROMPT,
                     4096,
                     0.7,
                     5);
@@ -275,6 +279,7 @@ class AnthropicMessagesModelClientTest {
             assertEquals(4096, request.path("max_tokens").asInt());
             assertEquals(0.7, request.path("temperature").asDouble());
             assertTrue(request.path("stream").asBoolean());
+            assertEquals(SYSTEM_PROMPT, request.path("system").asText());
 
             JsonNode messages = request.path("messages");
             assertEquals(4, messages.size());
@@ -320,6 +325,40 @@ class AnthropicMessagesModelClientTest {
             assertEquals("2023-06-01", server.anthropicVersion.get());
             assertEquals("application/json", server.contentType.get());
             assertEquals("text/event-stream", server.accept.get());
+        }
+    }
+
+    @Test
+    void omitsSystemPromptWhenBlank() throws Exception {
+        try (StubServer server = StubServer.start(200, "data: {\"type\":\"message_stop\"}\n\n");
+                HttpSseTransport transport = new HttpSseTransport(Duration.ofSeconds(5))) {
+            AnthropicMessagesModelClient client =
+                    new AnthropicMessagesModelClient(
+                            properties(server, "test-key", "", 4096), transport);
+            RecordingSubscriber subscriber = new RecordingSubscriber();
+
+            client.stream(new ModelRequest("", List.of())).subscribe(subscriber);
+            subscriber.await();
+
+            JsonNode request = JSON.readTree(server.requestBody.get());
+            assertFalse(request.has("system"));
+        }
+    }
+
+    @Test
+    void usesDefaultMaxTokensWhenNotConfigured() throws Exception {
+        try (StubServer server = StubServer.start(200, "data: {\"type\":\"message_stop\"}\n\n");
+                HttpSseTransport transport = new HttpSseTransport(Duration.ofSeconds(5))) {
+            AnthropicMessagesModelClient client =
+                    new AnthropicMessagesModelClient(
+                            properties(server, "test-key", SYSTEM_PROMPT, null), transport);
+            RecordingSubscriber subscriber = new RecordingSubscriber();
+
+            client.stream(new ModelRequest("", List.of())).subscribe(subscriber);
+            subscriber.await();
+
+            JsonNode request = JSON.readTree(server.requestBody.get());
+            assertEquals(8192, request.path("max_tokens").asInt());
         }
     }
 
@@ -489,12 +528,18 @@ class AnthropicMessagesModelClientTest {
     }
 
     private static ModelProperties properties(StubServer server, String apiKey) {
+        return properties(server, apiKey, SYSTEM_PROMPT, 4096);
+    }
+
+    private static ModelProperties properties(
+            StubServer server, String apiKey, String systemPrompt, Integer maxTokens) {
         return new ModelProperties(
                 "anthropic-messages",
                 server.baseUri,
                 apiKey,
                 "claude-sonnet-4-20250514",
-                4096,
+                systemPrompt,
+                maxTokens,
                 0.7,
                 5);
     }

@@ -146,10 +146,14 @@ final class ToolApprovalCoordinator {
 
     private void grant(StreamChunk.ToolCall call, RunContext context) {
         String operation = ApprovalRules.operationOf(call.argumentsJson());
+        // 无 operation 的调用无法安全限定授权粒度，只能逐次询问用户。
+        if (operation == null) {
+            return;
+        }
         grants.grant(
                 context.getSessionId(),
                 call.toolName(),
-                operation == null ? "*" : operation);
+                operation);
     }
 
     private static void emitRequested(

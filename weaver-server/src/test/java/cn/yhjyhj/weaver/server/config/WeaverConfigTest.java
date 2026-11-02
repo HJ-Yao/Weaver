@@ -49,6 +49,7 @@ class WeaverConfigTest {
                         URI.create("https://api.deepseek.com"),
                         "test-key",
                         "deepseek-chat",
+                        "你是 Weaver，一个用 Java 实现的 AI Agent Harness。被问及身份时以此为准。",
                         4096,
                         0.7,
                         5));

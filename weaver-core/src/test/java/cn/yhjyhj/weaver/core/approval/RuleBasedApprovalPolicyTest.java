@@ -241,6 +241,38 @@ class RuleBasedApprovalPolicyTest {
     }
 
     @Test
+    void explicitFileWriteGrantStillAllowsSameOperation() {
+        RuleBasedApprovalPolicy policy = RuleBasedApprovalPolicy.defaults();
+        InMemoryApprovalGrantStore grants = new InMemoryApprovalGrantStore();
+        grants.grant("session-1", "file", "write");
+
+        ApprovalResult result = policy.decide(
+                call("file", """
+                        {"op":"write","path":"src/Main.java","content":"class Main {}"}
+                        """),
+                Reversibility.RECOVERABLE,
+                ApprovalContext.interactive("session-1", grants));
+
+        assertEquals(new ApprovalResult(ApprovalDecision.ALLOW, "session-granted"), result);
+    }
+
+    @Test
+    void wildcardGrantCannotOverrideMissingOperation() {
+        RuleBasedApprovalPolicy policy = RuleBasedApprovalPolicy.defaults();
+        InMemoryApprovalGrantStore grants = new InMemoryApprovalGrantStore();
+        grants.grant("session-1", "shell", "*");
+
+        ApprovalResult result = policy.decide(
+                call("shell", """
+                        {"cmd":"rm note.txt"}
+                        """),
+                Reversibility.IRREVERSIBLE,
+                ApprovalContext.interactive("session-1", grants));
+
+        assertEquals(new ApprovalResult(ApprovalDecision.ASK, "needs-user"), result);
+    }
+
+    @Test
     void firstRuleWithinDecisionLayerWins() {
         RuleBasedApprovalPolicy policy = new RuleBasedApprovalPolicy(
                 List.of(

@@ -121,7 +121,7 @@ class ApprovalPolicyContextTest {
     }
 
     @Test
-    void operationlessGrantUsesWildcardGranularity() {
+    void operationlessCallCannotUseWildcardGrant() {
         ApprovalGrantStore grants = new InMemoryApprovalGrantStore();
         grants.grant(SESSION_ID, "shell", "*");
 
@@ -133,7 +133,7 @@ class ApprovalPolicyContextTest {
                 ApprovalContext.interactive(SESSION_ID, grants));
 
         assertEquals(
-                new ApprovalResult(ApprovalDecision.ALLOW, "session-granted"),
+                new ApprovalResult(ApprovalDecision.ASK, "needs-user"),
                 result);
     }
 

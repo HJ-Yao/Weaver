@@ -43,7 +43,13 @@ final class AnthropicRequestMapper {
     String requestBody(ModelRequest request) {
         ObjectNode body = JSON.createObjectNode();
         body.put("model", properties.model());
-        body.put("max_tokens", properties.maxTokens());
+        // Anthropic Messages 协议要求 max_tokens；未配置时使用 8192 作为协议缺省值。
+        body.put(
+                "max_tokens",
+                properties.maxTokens() == null ? 8192 : properties.maxTokens());
+        if (properties.systemPrompt() != null && !properties.systemPrompt().isBlank()) {
+            body.put("system", properties.systemPrompt());
+        }
         body.put("temperature", properties.temperature());
         body.put("stream", true);
         body.set("messages", messages(request.history()));

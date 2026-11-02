@@ -44,16 +44,25 @@ final class OpenAiRequestMapper {
         ObjectNode body = JSON.createObjectNode();
         body.put("model", properties.model());
         body.put("stream", true);
-        body.put("max_tokens", properties.maxTokens());
+        if (properties.maxTokens() != null) {
+            body.put("max_tokens", properties.maxTokens());
+        }
         body.put("temperature", properties.temperature());
-        body.set("messages", messages(request));
+        body.set("messages", messages(request.history(), properties.systemPrompt()));
         body.set("tools", tools(request.tools()));
         return body.toString();
     }
 
-    private static ArrayNode messages(ModelRequest request) {
+    private static ArrayNode messages(
+            List<ModelMessage> history, String systemPrompt) {
         ArrayNode messages = JSON.createArrayNode();
-        for (ModelMessage message : request.history()) {
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            ObjectNode system = JSON.createObjectNode();
+            system.put("role", "system");
+            system.put("content", systemPrompt);
+            messages.add(system);
+        }
+        for (ModelMessage message : history) {
             ObjectNode converted = JSON.createObjectNode();
             switch (message) {
                 case ModelMessage.User user -> {

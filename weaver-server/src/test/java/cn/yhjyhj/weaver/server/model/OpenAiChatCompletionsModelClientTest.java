@@ -33,6 +33,9 @@ import org.junit.jupiter.api.Test;
 
 class OpenAiChatCompletionsModelClientTest {
 
+    private static final String SYSTEM_PROMPT =
+            "你是 Weaver，一个用 Java 实现的 AI Agent Harness。被问及身份时以此为准。";
+
     private static final ObjectMapper JSON = new ObjectMapper(); // 校验请求体结构的测试解析器
 
     @Test
@@ -203,6 +206,7 @@ class OpenAiChatCompletionsModelClientTest {
                     URI.create(server.baseUri + "/"),
                     "test-key",
                     "deepseek-chat",
+                    SYSTEM_PROMPT,
                     4096,
                     0.7,
                     5);
@@ -337,24 +341,26 @@ class OpenAiChatCompletionsModelClientTest {
             assertEquals(0.7, request.path("temperature").asDouble());
 
             JsonNode messages = request.path("messages");
-            assertEquals("user", messages.get(0).path("role").asText());
-            assertEquals("inspect", messages.get(0).path("content").asText());
-            assertEquals("assistant", messages.get(1).path("role").asText());
-            assertEquals("", messages.get(1).path("content").asText());
+            assertEquals("system", messages.get(0).path("role").asText());
+            assertEquals(SYSTEM_PROMPT, messages.get(0).path("content").asText());
+            assertEquals("user", messages.get(1).path("role").asText());
+            assertEquals("inspect", messages.get(1).path("content").asText());
+            assertEquals("assistant", messages.get(2).path("role").asText());
+            assertEquals("", messages.get(2).path("content").asText());
             assertEquals(
                     "call-1",
-                    messages.get(1).path("tool_calls").get(0).path("id").asText());
+                    messages.get(2).path("tool_calls").get(0).path("id").asText());
             assertEquals(
                     "file",
-                    messages.get(1)
+                    messages.get(2)
                             .path("tool_calls")
                             .get(0)
                             .path("function")
                             .path("name")
                             .asText());
-            assertEquals("tool", messages.get(2).path("role").asText());
-            assertEquals("call-1", messages.get(2).path("tool_call_id").asText());
-            assertEquals("file contents", messages.get(2).path("content").asText());
+            assertEquals("tool", messages.get(3).path("role").asText());
+            assertEquals("call-1", messages.get(3).path("tool_call_id").asText());
+            assertEquals("file contents", messages.get(3).path("content").asText());
             assertEquals("file", request.path("tools").get(0).path("function").path("name").asText());
             assertTrue(request.path("tools")
                     .get(0)
@@ -365,6 +371,41 @@ class OpenAiChatCompletionsModelClientTest {
                     .isObject());
             assertEquals("Bearer test-key", server.authorization.get());
             assertEquals("application/json", server.contentType.get());
+        }
+    }
+
+    @Test
+    void omitsSystemPromptWhenBlank() throws Exception {
+        try (StubServer server = StubServer.start(200, "data: [DONE]\n\n");
+                HttpSseTransport transport = new HttpSseTransport(Duration.ofSeconds(5))) {
+            OpenAiChatCompletionsModelClient client =
+                    new OpenAiChatCompletionsModelClient(
+                            properties(server, "test-key", "", 4096), transport);
+            RecordingSubscriber subscriber = new RecordingSubscriber();
+
+            client.stream(new ModelRequest("", List.of())).subscribe(subscriber);
+            subscriber.await();
+
+            JsonNode request = JSON.readTree(server.requestBody.get());
+            assertFalse(request.has("system"));
+            assertEquals(0, request.path("messages").size());
+        }
+    }
+
+    @Test
+    void omitsMaxTokensWhenNotConfigured() throws Exception {
+        try (StubServer server = StubServer.start(200, "data: [DONE]\n\n");
+                HttpSseTransport transport = new HttpSseTransport(Duration.ofSeconds(5))) {
+            OpenAiChatCompletionsModelClient client =
+                    new OpenAiChatCompletionsModelClient(
+                            properties(server, "test-key", SYSTEM_PROMPT, null), transport);
+            RecordingSubscriber subscriber = new RecordingSubscriber();
+
+            client.stream(new ModelRequest("", List.of())).subscribe(subscriber);
+            subscriber.await();
+
+            JsonNode request = JSON.readTree(server.requestBody.get());
+            assertFalse(request.has("max_tokens"));
         }
     }
 
@@ -430,12 +471,18 @@ class OpenAiChatCompletionsModelClientTest {
     }
 
     private static ModelProperties properties(StubServer server, String apiKey) {
+        return properties(server, apiKey, SYSTEM_PROMPT, 4096);
+    }
+
+    private static ModelProperties properties(
+            StubServer server, String apiKey, String systemPrompt, Integer maxTokens) {
         return new ModelProperties(
                 "openai-chat-completions",
                 server.baseUri,
                 apiKey,
                 "deepseek-chat",
-                4096,
+                systemPrompt,
+                maxTokens,
                 0.7,
                 5);
     }

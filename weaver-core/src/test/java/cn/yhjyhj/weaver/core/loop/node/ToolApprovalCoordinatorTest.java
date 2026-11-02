@@ -10,6 +10,7 @@ import cn.yhjyhj.weaver.core.approval.ApprovalGate;
 import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalResult;
 import cn.yhjyhj.weaver.core.approval.InMemoryApprovalGrantStore;
+import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.ToolResult;
 import cn.yhjyhj.weaver.core.loop.context.RunContext;
@@ -19,6 +20,7 @@ import cn.yhjyhj.weaver.core.tool.Tool;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
@@ -124,6 +126,34 @@ class ToolApprovalCoordinatorTest {
     }
 
     @Test
+    void approvingShellDoesNotGrantTheWholeTool() {
+        List<SessionEvent> emitted = new ArrayList<>();
+        InMemoryApprovalGrantStore grants = new InMemoryApprovalGrantStore();
+        AtomicInteger approvalRequests = new AtomicInteger();
+        ToolApprovalCoordinator coordinator = coordinator(
+                RuleBasedApprovalPolicy.defaults(),
+                (call, reversibility) -> {
+                    approvalRequests.incrementAndGet();
+                    return true;
+                },
+                grants);
+
+        List<ApprovalOutcome> outcomes = coordinator.approveAll(
+                List.of(
+                        call("call-1", "shell", "{\"cmd\":\"echo hello\"}"),
+                        call("call-2", "shell", "{\"cmd\":\"rm note.txt\"}")),
+                List.of(
+                        tool("shell", Reversibility.IRREVERSIBLE),
+                        tool("shell", Reversibility.IRREVERSIBLE)),
+                context(emitted));
+
+        assertTrue(outcomes.getFirst().approved());
+        assertTrue(outcomes.get(1).approved());
+        assertEquals(2, approvalRequests.get());
+        assertFalse(grants.isGranted(SESSION_ID, "shell", "*"));
+    }
+
+    @Test
     void unknownToolIsDecidedAsIrreversible() {
         List<SessionEvent> emitted = new ArrayList<>();
         AtomicReference<Reversibility> observed = new AtomicReference<>();
@@ -155,7 +185,12 @@ class ToolApprovalCoordinatorTest {
     }
 
     private static StreamChunk.ToolCall call(String callId, String toolName) {
-        return new StreamChunk.ToolCall(callId, toolName, "{\"op\":\"write\"}");
+        return call(callId, toolName, "{\"op\":\"write\"}");
+    }
+
+    private static StreamChunk.ToolCall call(
+            String callId, String toolName, String argumentsJson) {
+        return new StreamChunk.ToolCall(callId, toolName, argumentsJson);
     }
 
     private static Tool tool(String name, Reversibility reversibility) {

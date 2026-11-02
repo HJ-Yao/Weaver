@@ -49,7 +49,8 @@ public record WeaverProperties(
                         URI.create("https://api.deepseek.com"),
                         "",
                         "deepseek-chat",
-                        4096,
+                        "你是 Weaver，一个用 Java 实现的 AI Agent Harness。被问及身份时以此为准。",
+                        null,
                         0.7,
                         120),
                 new ApprovalProperties(300));
@@ -75,7 +76,8 @@ public record WeaverProperties(
      * @param baseUrl API 前缀；客户端会追加 {@code /chat/completions}
      * @param apiKey API 密钥；允许为空，首次请求时返回明确错误
      * @param model 请求使用的模型名
-     * @param maxTokens 单次响应的最大输出 token 数
+     * @param systemPrompt 系统提示词；为空时不发送
+     * @param maxTokens 单次响应的最大输出 token 数；为空时使用厂商默认
      * @param temperature 采样温度
      * @param timeoutSeconds HTTP 请求超时秒数
      */
@@ -84,7 +86,8 @@ public record WeaverProperties(
             @NotNull URI baseUrl,
             String apiKey,
             @NotBlank String model,
-            @Min(1) int maxTokens,
+            String systemPrompt,
+            @Min(1) Integer maxTokens,
             double temperature,
             @Min(1) int timeoutSeconds) {}
 

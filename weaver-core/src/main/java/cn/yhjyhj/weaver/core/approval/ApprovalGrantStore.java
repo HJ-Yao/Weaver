@@ -8,7 +8,7 @@ public interface ApprovalGrantStore {
      *
      * @param sessionId 会话标识
      * @param toolName 工具名称
-     * @param operation 工具操作；无操作时为 {@code "*"}
+     * @param operation 规范化的工具操作；调用方不得为无操作调用查询授权
      * @return 已授权时返回 true
      */
     boolean isGranted(String sessionId, String toolName, String operation);
@@ -18,7 +18,7 @@ public interface ApprovalGrantStore {
      *
      * @param sessionId 会话标识
      * @param toolName 工具名称
-     * @param operation 工具操作；无操作时使用 {@code "*"}
+     * @param operation 规范化的工具操作；必须非空
      */
     void grant(String sessionId, String toolName, String operation);
 

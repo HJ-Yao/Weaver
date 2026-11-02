@@ -277,16 +277,39 @@ class RunLoopTest {
     }
 
     @Test
-    void finishesRunWhenModelStopsForLength() {
+    void continuesRunWhenModelStopsForLength() {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        ModelClient model = request -> publisherOf(
-                new StreamChunk.Text("partial"),
-                new StreamChunk.Done(StreamChunk.StopReason.LENGTH));
+        ScriptedModelClient model = new ScriptedModelClient(List.of(
+                response(
+                        new StreamChunk.Text("partial"),
+                        new StreamChunk.Done(StreamChunk.StopReason.LENGTH)),
+                response(
+                        new StreamChunk.Text(" done"),
+                        new StreamChunk.Done(StreamChunk.StopReason.STOP))), null);
 
         new RunLoop(model, store).run(SESSION_ID, "你好");
 
         assertFalse(events(store).getLast() instanceof SessionEvent.RunFinished finished
                 && finished.aborted());
+        assertEquals(2, model.requests.size());
+        assertEquals(2, model.requests.get(1).history().size());
+    }
+
+    @Test
+    void repeatedLengthStopsAtMaxSteps() {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        List<StreamChunk> lengthResponse = response(
+                new StreamChunk.Text("partial"),
+                new StreamChunk.Done(StreamChunk.StopReason.LENGTH));
+        ScriptedModelClient model =
+                new ScriptedModelClient(List.of(), lengthResponse);
+        RunLoop runLoop = new RunLoop(model, store, config(3, ToolRegistry.empty()));
+
+        runLoop.run(SESSION_ID, "你好");
+
+        assertEquals(3, model.requests.size());
+        assertEquals(new SessionEvent.RunFinished(true), events(store).getLast());
+        assertTrue(runLoop.finalPhase() instanceof Phase.Maintenance);
     }
 
     @Test
