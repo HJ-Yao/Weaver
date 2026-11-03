@@ -58,6 +58,9 @@ npm run dev
 
 Without `.env`, the server still starts but cannot call the model.
 
+The same file also carries the console's dev proxy target (`VITE_API_TARGET`, default
+`http://localhost:8080`), so server and frontend are configured in one place.
+
 Rules for AI agents working on this repo: [AGENTS.md](AGENTS.md).
 
 ## License

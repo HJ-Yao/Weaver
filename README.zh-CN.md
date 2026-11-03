@@ -58,6 +58,9 @@ npm run dev
 
 不配置 `.env` 时服务端仍可启动，只是不能调用模型。
 
+同一个文件里还有前端的开发代理目标（`VITE_API_TARGET`，默认 `http://localhost:8080`），
+服务端与前端只维护一份配置。
+
 AI 协作规范见 [AGENTS.md](AGENTS.md)。
 
 ## 许可证
