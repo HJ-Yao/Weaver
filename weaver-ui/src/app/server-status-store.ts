@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ServerStatusDto } from '@/shared/api/status';
+import { statusApi, type ServerStatusDto } from '@/shared/api/status';
 
 /** 服务端连接阶段。 */
 export type ServerStatusPhase = 'connecting' | 'connected' | 'disconnected';
@@ -22,6 +22,8 @@ interface ServerStatusState {
   setDisconnected: (error: string) => void;
   /** 开始新的连接尝试。 */
   setConnecting: () => void;
+  /** 主动获取最新服务端状态，并把成功或失败写入 store。 */
+  refresh: () => Promise<void>;
 }
 
 export const useServerStatusStore = create<ServerStatusState>()((set) => ({
@@ -32,4 +34,20 @@ export const useServerStatusStore = create<ServerStatusState>()((set) => ({
   setConnected: (status) => set({ phase: 'connected', status, error: null }),
   setDisconnected: (error) => set({ phase: 'disconnected', status: null, error }),
   setConnecting: () => set({ phase: 'connecting', status: null, error: null }),
+
+  refresh: async () => {
+    try {
+      const status = await statusApi.get();
+      set({ phase: 'connected', status, error: null });
+    } catch (error) {
+      // 轮询失败不应产生未处理的 Promise；把可读错误留在 store 供 UI 展示。
+      set({ phase: 'disconnected', status: null, error: readableError(error) });
+    }
+  },
 }));
+
+/** 将未知的请求失败转换为状态栏可展示的短文本。 */
+function readableError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return message || '未知错误';
+}

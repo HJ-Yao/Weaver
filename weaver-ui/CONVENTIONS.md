@@ -125,7 +125,6 @@ pages → widgets → features → entities → shared
 
 **M2 — 接真实数据**
 
-- [ ] 工作区与模型配置持久化到 `~/.weaver/config.json`
 - [ ] 插件 / 技能目录接后端；公开 / 个人筛选下沉到服务端
 - [ ] token 用量统计（模型客户端解析 usage）
 

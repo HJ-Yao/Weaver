@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { useSessionStore } from '@/entities/session/store';
-import { statusApi } from '@/shared/api/status';
 import styles from './StatusBar.module.css';
 import { useServerStatusStore } from './server-status-store';
 import { useUiStore } from './ui-store';
@@ -20,36 +19,19 @@ export function StatusBar() {
   const phase = useServerStatusStore((state) => state.phase);
   const serverStatus = useServerStatusStore((state) => state.status);
   const connectionError = useServerStatusStore((state) => state.error);
-  const setConnected = useServerStatusStore((state) => state.setConnected);
-  const setDisconnected = useServerStatusStore((state) => state.setDisconnected);
   const setConnecting = useServerStatusStore((state) => state.setConnecting);
+  const refresh = useServerStatusStore((state) => state.refresh);
 
   useEffect(() => {
-    let mounted = true;
-
     setConnecting();
 
-    const refreshStatus = () => {
-      void statusApi
-        .get()
-        .then((status) => {
-          if (mounted) setConnected(status);
-        })
-        .catch((error: unknown) => {
-          if (mounted) {
-            setDisconnected(readableError(error));
-          }
-        });
-    };
-
-    refreshStatus();
-    const timer = window.setInterval(refreshStatus, STATUS_POLL_INTERVAL_MS);
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), STATUS_POLL_INTERVAL_MS);
 
     return () => {
-      mounted = false;
       window.clearInterval(timer);
     };
-  }, [setConnected, setConnecting, setDisconnected]);
+  }, [refresh, setConnecting]);
 
   const isConnected = phase === 'connected' && serverStatus !== null;
   const connectionLabel =
@@ -79,10 +61,4 @@ export function StatusBar() {
       <span>审批 {approvalMode}</span>
     </footer>
   );
-}
-
-/** 将未知的请求失败转换为适合在状态栏提示的短文本。 */
-function readableError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return message || '未知错误';
 }
