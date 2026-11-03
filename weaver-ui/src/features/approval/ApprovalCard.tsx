@@ -9,9 +9,9 @@ const STATUS_LABEL = {
 } as const;
 
 /**
- * 被阻塞的工具调用发起的审批请求。
+ * 被阻塞的工具调用发起的待处理审批请求。
  *
- * 完成决策后卡片仍保留在 transcript 中，以维持对话的审计轨迹；只禁用操作按钮。
+ * 完成决策后由会话 store 将卡片从 transcript 移除；审计事实仍保留在事件日志与回放中。
  */
 export function ApprovalCard({ item }: { item: ApprovalItem }) {
   const resolveApproval = useSessionStore((state) => state.resolveApproval);
@@ -46,9 +46,7 @@ export function ApprovalCard({ item }: { item: ApprovalItem }) {
         >
           拒绝
         </button>
-        <span className={styles.hint}>
-          {pending ? '批准后本会话内同类操作将免问' : '决策已记录'}
-        </span>
+        <span className={styles.hint}>批准结果会写入会话事件日志</span>
       </div>
     </div>
   );

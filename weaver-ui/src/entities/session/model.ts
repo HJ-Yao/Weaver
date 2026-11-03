@@ -68,8 +68,9 @@ export type TranscriptItem = MessageItem | ToolCallItem | ApprovalItem;
 /**
  * 根据服务端快照重建 transcript。
  *
- * 限制：`SessionSnapshot` 不包含消息、工具调用和审批之间的全局顺序，
- * 因此工具与审批项会追加在消息之后。
+ * 限制：`SessionSnapshot` 不包含消息与工具调用之间的全局顺序，
+ * 因此工具项会追加在消息之后。快照中的审批记录均属于已处理历史，
+ * 不应在会话流中重新生成卡片；历史审批由「审批」面板与回放展示。
  * TODO(M3): 服务端暴露原始事件流后，改用有序的 `SessionEvent[]` 折叠。
  */
 export function transcriptFromSnapshot(snapshot: SessionSnapshotDto): TranscriptItem[] {
@@ -93,19 +94,5 @@ export function transcriptFromSnapshot(snapshot: SessionSnapshotDto): Transcript
     expanded: false,
   }));
 
-  // toolName 为 `unknown` 表示这次调用是自动放行的，没有走过用户审批，
-  // 渲染成「已批准」卡片只会制造噪音。判定依据见 SessionSnapshot.ApprovalRecord 的注释。
-  const approvals: ApprovalItem[] = snapshot.approvals
-    .filter((approval) => approval.toolName !== 'unknown')
-    .map((approval) => ({
-      kind: 'approval',
-      id: approval.callId,
-      toolName: approval.toolName,
-      argumentsJson: '',
-      reversibility: 'IRREVERSIBLE',
-      timeoutSeconds: 0,
-      status: approval.approved ? 'approved' : 'rejected',
-    }));
-
-  return [...messages, ...tools, ...approvals];
+  return [...messages, ...tools];
 }

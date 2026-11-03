@@ -273,10 +273,8 @@ export const useSessionStore = create<SessionState>()((set, get) => {
 
     resolveApproval: (callId, approved) => {
       set((state) => ({
-        transcript: state.transcript.map((item) =>
-          item.kind === 'approval' && item.id === callId
-            ? { ...item, status: approved ? 'approved' : 'rejected' }
-            : item,
+        transcript: state.transcript.filter(
+          (item) => !(item.kind === 'approval' && item.id === callId),
         ),
       }));
 

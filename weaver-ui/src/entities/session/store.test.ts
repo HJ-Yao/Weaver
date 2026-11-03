@@ -305,6 +305,46 @@ describe('useSessionStore', () => {
     expect(mockedSessionApi.cancelRun).toHaveBeenCalledWith(firstSession.id);
   });
 
+  it('removes a resolved approval without changing other transcript items', () => {
+    mockedSessionApi.resolveApproval.mockResolvedValue(undefined);
+    const userMessage = {
+      kind: 'message' as const,
+      id: 'message-user',
+      role: 'user' as const,
+      content: 'commit this',
+    };
+    const pendingApproval = {
+      kind: 'approval' as const,
+      id: 'call-approval',
+      toolName: 'git.commit',
+      argumentsJson: '{"message":"test"}',
+      reversibility: 'IRREVERSIBLE' as const,
+      timeoutSeconds: 120,
+      status: 'pending' as const,
+    };
+    const toolCall = {
+      kind: 'tool' as const,
+      id: 'call-tool',
+      toolName: 'file.read',
+      argumentsJson: '{"path":"README.md"}',
+      status: 'done' as const,
+      expanded: false,
+    };
+    useSessionStore.setState({
+      activeSessionId: firstSession.id,
+      transcript: [userMessage, pendingApproval, toolCall],
+    });
+
+    useSessionStore.getState().resolveApproval(pendingApproval.id, true);
+
+    expect(mockedSessionApi.resolveApproval).toHaveBeenCalledWith(
+      firstSession.id,
+      pendingApproval.id,
+      true,
+    );
+    expect(useSessionStore.getState().transcript).toEqual([userMessage, toolCall]);
+  });
+
   it('marks the streaming reply stopped when the server reports an abort', () => {
     let handlers: StreamHandlers | undefined;
     mockedStreamMessage.mockImplementation((_sessionId, _content, streamHandlers) => {

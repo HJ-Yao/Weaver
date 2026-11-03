@@ -45,14 +45,7 @@ describe('transcriptFromSnapshot', () => {
     ]);
   });
 
-  it('maps approval records onto the resolved statuses', () => {
-    const approvals = transcriptFromSnapshot(snapshot).filter((item) => item.kind === 'approval');
-
-    expect(approvals).toHaveLength(1);
-    expect(approvals[0]).toMatchObject({ id: 'call-3', status: 'rejected' });
-  });
-
-  it('drops auto-allowed calls that never asked the user', () => {
+  it('does not recreate approval cards from snapshot history', () => {
     const withAutoAllow = {
       ...snapshot,
       approvals: [
@@ -61,10 +54,8 @@ describe('transcriptFromSnapshot', () => {
       ],
     };
 
-    const approvals = transcriptFromSnapshot(withAutoAllow).filter(
-      (item) => item.kind === 'approval',
-    );
+    const items = transcriptFromSnapshot(withAutoAllow);
 
-    expect(approvals.map((item) => item.id)).toEqual(['call-3']);
+    expect(items.some((item) => item.kind === 'approval')).toBe(false);
   });
 });
