@@ -84,6 +84,15 @@
   gap: var(--space-3);
 }
 
+.modelLabel {
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--faint);
+  font: 11px/1 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .send {
   height: 32px;
   padding: 0 18px;

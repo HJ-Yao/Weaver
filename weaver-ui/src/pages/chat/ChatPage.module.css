@@ -7,6 +7,10 @@
   background: var(--bg);
 }
 
+.emptyChat {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
 .stateMessage,
 .stateError {
   align-self: center;
@@ -24,29 +28,45 @@
   text-align: center;
 }
 
-.emptyState {
-  align-self: center;
-  justify-self: center;
+.welcome {
+  position: relative;
   display: grid;
+  place-content: center;
   justify-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
+  min-height: 0;
+  padding: var(--space-8) var(--space-6) var(--space-6);
+  overflow: hidden;
+  text-align: center;
 }
 
-.emptyTitle {
+.welcome::before {
+  position: absolute;
+  width: 420px;
+  height: 240px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-soft), transparent 70%);
+  content: '';
+  pointer-events: none;
+}
+
+.welcomeTitle,
+.welcomeHint {
+  position: relative;
   margin: 0;
-  color: var(--muted);
-  font-size: 14px;
 }
 
-.emptyAction {
-  padding: 8px 14px;
-  border: 1px solid var(--accent-2);
-  border-radius: var(--radius-md);
-  background: var(--accent-soft);
+.welcomeTitle {
   color: var(--text);
-  font-weight: 600;
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
 }
 
-.emptyAction:hover {
-  border-color: var(--accent);
+.welcomeHint {
+  max-width: 460px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
 }

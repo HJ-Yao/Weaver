@@ -8,6 +8,10 @@ export interface ServerStatusDto {
   workspace: string;
   maxSteps: number;
   uptimeSeconds: number;
+  /** 当前配置的模型名。 */
+  model: string;
+  /** 当前模型协议标识。 */
+  protocol: string;
 }
 
 export const statusApi = {

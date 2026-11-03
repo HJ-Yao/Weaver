@@ -168,6 +168,58 @@ describe('useSessionStore', () => {
     expect(state.transcript).toEqual([]);
   });
 
+  it('creates a session before streaming the first welcome-page message', async () => {
+    const createdSession: SessionSummaryDto = {
+      id: 'session-first-message',
+      title: '新会话',
+      createdAt: '2026-10-31T12:30:00Z',
+    };
+    let resolveCreate: (session: SessionSummaryDto) => void = () => undefined;
+    mockedSessionApi.create.mockReturnValue(
+      new Promise<SessionSummaryDto>((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+    mockedStreamMessage.mockResolvedValue(undefined);
+
+    useSessionStore.getState().sendMessage('  build the welcome page  ');
+
+    expect(mockedSessionApi.create).toHaveBeenCalledWith('新会话');
+    expect(mockedStreamMessage).not.toHaveBeenCalled();
+
+    resolveCreate(createdSession);
+
+    await vi.waitFor(() =>
+      expect(mockedStreamMessage).toHaveBeenCalledWith(
+        createdSession.id,
+        'build the welcome page',
+        expect.any(Object),
+      ),
+    );
+
+    const state = useSessionStore.getState();
+    expect(state.activeSessionId).toBe(createdSession.id);
+    expect(
+      state.transcript.some(
+        (item) =>
+          item.kind === 'message' &&
+          item.role === 'user' &&
+          item.content === 'build the welcome page',
+      ),
+    ).toBe(true);
+  });
+
+  it('keeps the first message out of the run when session creation fails', async () => {
+    mockedSessionApi.create.mockRejectedValue(new Error('create failed'));
+
+    useSessionStore.getState().sendMessage('do not lose me');
+
+    await vi.waitFor(() => expect(useSessionStore.getState().status).toBe('error'));
+    expect(mockedStreamMessage).not.toHaveBeenCalled();
+    expect(useSessionStore.getState().transcript).toEqual([]);
+    expect(useSessionStore.getState().error).toContain('create failed');
+  });
+
   it('keeps the run active after the model turn until the stream closes', async () => {
     let handlers: StreamHandlers | undefined;
     let closeStream: () => void = () => undefined;

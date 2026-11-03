@@ -27,7 +27,7 @@ public class StatusController {
     /**
      * 返回当前服务状态。
      *
-     * @return 健康状态、SQLite 能力、工作区配置与 JVM 运行时长
+     * @return 健康状态、SQLite 能力、工作区与模型配置以及 JVM 运行时长
      */
     @GetMapping
     public ServerStatus status() {
@@ -37,6 +37,8 @@ public class StatusController {
                 true,
                 properties.workspace().toAbsolutePath().normalize().toString(),
                 properties.maxSteps(),
-                ManagementFactory.getRuntimeMXBean().getUptime() / 1000);
+                ManagementFactory.getRuntimeMXBean().getUptime() / 1000,
+                properties.model().model(),
+                properties.model().protocol());
     }
 }

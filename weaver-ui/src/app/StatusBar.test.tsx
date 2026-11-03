@@ -6,6 +6,7 @@ import type { ServerStatusDto } from '@/shared/api/status';
 import { statusApi } from '@/shared/api/status';
 import { streamMessage } from '@/shared/api/stream';
 import { useSessionStore } from '@/entities/session/store';
+import { useServerStatusStore } from './server-status-store';
 import { useUiStore } from './ui-store';
 import { StatusBar } from './StatusBar';
 
@@ -36,6 +37,8 @@ const connectedStatus: ServerStatusDto = {
   workspace: 'F:\\workspace',
   maxSteps: 50,
   uptimeSeconds: 12,
+  model: 'deepseek-chat',
+  protocol: 'openai-chat-completions',
 };
 
 const summary: SessionSummaryDto = {
@@ -69,6 +72,7 @@ beforeEach(() => {
     error: null,
   });
   useUiStore.setState({ approvalMode: 'DEFAULT' });
+  useServerStatusStore.setState({ phase: 'connecting', status: null, error: null });
 });
 
 describe('StatusBar', () => {
@@ -82,6 +86,11 @@ describe('StatusBar', () => {
     expect(screen.getByText('sqlite · WAL')).toBeInTheDocument();
     expect(screen.getByText('seq 42')).toBeInTheDocument();
     expect(screen.getByText('tokens —')).toHaveAttribute('title', '模型用量统计尚未接入（M2）');
+    expect(useServerStatusStore.getState()).toMatchObject({
+      phase: 'connected',
+      status: connectedStatus,
+      error: null,
+    });
   });
 
   it('shows a disconnected state and hides unavailable storage details on failure', async () => {
@@ -92,6 +101,11 @@ describe('StatusBar', () => {
     const connection = await screen.findByText('未连接');
     expect(connection).toHaveAttribute('title', 'service unavailable');
     expect(screen.getByText('—')).toBeInTheDocument();
+    expect(useServerStatusStore.getState()).toMatchObject({
+      phase: 'disconnected',
+      status: null,
+      error: 'service unavailable',
+    });
   });
 
   it('shows the connecting state while the initial status request is pending', () => {

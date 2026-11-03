@@ -75,6 +75,112 @@ export const useSessionStore = create<SessionState>()((set, get) => {
     }
   };
 
+  /**
+   * 确保当前有会话后再追加消息并启动流。
+   *
+   * 首屏发送时 `createSession` 会清空 transcript，因此必须等它完成后
+   * 才写入用户消息；创建失败时保留 `createSession` 写入的错误状态。
+   */
+  const startSend = async (text: string) => {
+    let sessionId = get().activeSessionId;
+    if (!sessionId) {
+      await get().createSession();
+      sessionId = get().activeSessionId;
+      if (!sessionId) return;
+    }
+
+    const user: MessageItem = {
+      kind: 'message',
+      id: nextId('message'),
+      role: 'user',
+      content: text,
+    };
+    const reply: MessageItem = {
+      kind: 'message',
+      id: nextId('message'),
+      role: 'assistant',
+      content: '',
+      streaming: true,
+    };
+
+    set((state) => ({ transcript: [...state.transcript, user, reply], running: true }));
+
+    void streamMessage(sessionId, text, {
+      onDelta: (delta) =>
+        updateItem(reply.id, (item) =>
+          item.kind === 'message' ? { ...item, content: item.content + delta } : item,
+        ),
+      onTool: (call) => {
+        const tool: ToolCallItem = {
+          kind: 'tool',
+          id: call.callId,
+          toolName: call.toolName,
+          argumentsJson: call.argumentsJson,
+          status: 'running',
+          expanded: false,
+        };
+        set((state) => ({ transcript: [...state.transcript, tool] }));
+      },
+      onToolResult: (result) => {
+        set((state) => ({
+          transcript: state.transcript.map((item) =>
+            item.kind === 'tool' && item.id === result.callId
+              ? {
+                  ...item,
+                  status: result.isError ? 'failed' : 'done',
+                  durationMs: result.durationMs,
+                  resultText: result.content,
+                }
+              : item,
+          ),
+        }));
+      },
+      onApproval: (approval) => {
+        const approvalItem: ApprovalItem = {
+          kind: 'approval',
+          id: approval.callId,
+          toolName: approval.toolName,
+          argumentsJson: approval.argumentsJson,
+          reversibility: approval.reversibility,
+          timeoutSeconds: approval.timeoutSeconds,
+          status: 'pending',
+        };
+        set((state) => ({ transcript: [...state.transcript, approvalItem] }));
+      },
+      onAborted: () => {
+        updateItem(reply.id, (item) =>
+          item.kind === 'message' ? { ...item, streaming: false, stopped: true } : item,
+        );
+        set({ running: false });
+      },
+      onDone: () => {
+        // 只代表模型这一轮结束；工具执行与审批可能仍在继续，
+        // 因此 running 要等 SSE 流关闭后再复位（见下方的 finally）。
+        updateItem(reply.id, (item) =>
+          item.kind === 'message' ? { ...item, streaming: false } : item,
+        );
+      },
+      onError: (message) => {
+        updateItem(reply.id, (item) =>
+          item.kind === 'message'
+            ? { ...item, content: `运行失败：${message}`, streaming: false }
+            : item,
+        );
+        set({ running: false });
+      },
+    })
+      .catch(() => {
+        updateItem(reply.id, (item) =>
+          item.kind === 'message' ? { ...item, streaming: false } : item,
+        );
+      })
+      .finally(() => {
+        // 服务端关闭响应 = 本次运行真正结束，此时才允许再次发送。
+        set({ running: false });
+        void refreshLastSeq(sessionId);
+      });
+  };
+
   return {
     sessions: [],
     activeSessionId: null,
@@ -155,103 +261,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
     sendMessage: (content) => {
       const text = content.trim();
       if (!text || get().running) return;
-
-      const user: MessageItem = {
-        kind: 'message',
-        id: nextId('message'),
-        role: 'user',
-        content: text,
-      };
-      const reply: MessageItem = {
-        kind: 'message',
-        id: nextId('message'),
-        role: 'assistant',
-        content: '',
-        streaming: true,
-      };
-
-      set((state) => ({ transcript: [...state.transcript, user, reply], running: true }));
-
-      const sessionId = get().activeSessionId;
-      if (!sessionId) {
-        set({ running: false });
-        return;
-      }
-
-      void streamMessage(sessionId, text, {
-        onDelta: (delta) =>
-          updateItem(reply.id, (item) =>
-            item.kind === 'message' ? { ...item, content: item.content + delta } : item,
-          ),
-        onTool: (call) => {
-          const tool: ToolCallItem = {
-            kind: 'tool',
-            id: call.callId,
-            toolName: call.toolName,
-            argumentsJson: call.argumentsJson,
-            status: 'running',
-            expanded: false,
-          };
-          set((state) => ({ transcript: [...state.transcript, tool] }));
-        },
-        onToolResult: (result) => {
-          set((state) => ({
-            transcript: state.transcript.map((item) =>
-              item.kind === 'tool' && item.id === result.callId
-                ? {
-                    ...item,
-                    status: result.isError ? 'failed' : 'done',
-                    durationMs: result.durationMs,
-                    resultText: result.content,
-                  }
-                : item,
-            ),
-          }));
-        },
-        onApproval: (approval) => {
-          const approvalItem: ApprovalItem = {
-            kind: 'approval',
-            id: approval.callId,
-            toolName: approval.toolName,
-            argumentsJson: approval.argumentsJson,
-            reversibility: approval.reversibility,
-            timeoutSeconds: approval.timeoutSeconds,
-            status: 'pending',
-          };
-          set((state) => ({ transcript: [...state.transcript, approvalItem] }));
-        },
-        onAborted: () => {
-          updateItem(reply.id, (item) =>
-            item.kind === 'message' ? { ...item, streaming: false, stopped: true } : item,
-          );
-          set({ running: false });
-        },
-        onDone: () => {
-          // 只代表模型这一轮结束；工具执行与审批可能仍在继续，
-          // 因此 running 要等 SSE 流关闭后再复位（见下方的 finally）。
-          updateItem(reply.id, (item) =>
-            item.kind === 'message' ? { ...item, streaming: false } : item,
-          );
-        },
-        onError: (message) => {
-          updateItem(reply.id, (item) =>
-            item.kind === 'message'
-              ? { ...item, content: `运行失败：${message}`, streaming: false }
-              : item,
-          );
-          set({ running: false });
-        },
-      })
-        .catch(() => {
-          updateItem(reply.id, (item) =>
-            item.kind === 'message' ? { ...item, streaming: false } : item,
-          );
-        })
-        .finally(() => {
-          // 服务端关闭响应 = 本次运行真正结束，此时才允许再次发送。
-          set({ running: false });
-          void refreshLastSeq(sessionId);
-        });
+      void startSend(text);
     },
 
     cancelRun: () => {

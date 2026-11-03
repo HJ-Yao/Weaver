@@ -10,6 +10,7 @@ import { statusApi } from '@/shared/api/status';
 import { streamMessage } from '@/shared/api/stream';
 import { workspaceApi } from '@/shared/api/workspace';
 import { routes } from './router';
+import { useServerStatusStore } from './server-status-store';
 
 vi.mock('@/shared/api/sessions', () => ({
   sessionApi: {
@@ -50,6 +51,8 @@ const connectedStatus: ServerStatusDto = {
   workspace: 'F:\\workspace',
   maxSteps: 20,
   uptimeSeconds: 12,
+  model: 'deepseek-chat',
+  protocol: 'openai-chat-completions',
 };
 
 const loadedSession: SessionSummaryDto = {
@@ -88,6 +91,7 @@ beforeEach(() => {
     status: 'idle',
     error: null,
   });
+  useServerStatusStore.setState({ phase: 'connecting', status: null, error: null });
   mockedSessionApi.list.mockResolvedValue([]);
   mockedStatusApi.get.mockResolvedValue(connectedStatus);
   mockedWorkspaceApi.diff.mockResolvedValue({ files: [], truncated: false });

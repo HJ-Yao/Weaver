@@ -1,17 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useSessionStore } from '@/entities/session/store';
-import type { ServerStatusDto } from '@/shared/api/status';
 import { statusApi } from '@/shared/api/status';
 import styles from './StatusBar.module.css';
+import { useServerStatusStore } from './server-status-store';
 import { useUiStore } from './ui-store';
 
 /** 服务健康状态的轮询间隔。 */
 const STATUS_POLL_INTERVAL_MS = 15_000;
-
-type ConnectionState =
-  | { phase: 'connecting' }
-  | { phase: 'connected'; status: ServerStatusDto }
-  | { phase: 'disconnected'; error: string };
 
 /**
  * 底部状态条。
@@ -22,20 +17,27 @@ type ConnectionState =
 export function StatusBar() {
   const approvalMode = useUiStore((state) => state.approvalMode);
   const lastSeq = useSessionStore((state) => state.lastSeq);
-  const [connection, setConnection] = useState<ConnectionState>({ phase: 'connecting' });
+  const phase = useServerStatusStore((state) => state.phase);
+  const serverStatus = useServerStatusStore((state) => state.status);
+  const connectionError = useServerStatusStore((state) => state.error);
+  const setConnected = useServerStatusStore((state) => state.setConnected);
+  const setDisconnected = useServerStatusStore((state) => state.setDisconnected);
+  const setConnecting = useServerStatusStore((state) => state.setConnecting);
 
   useEffect(() => {
     let mounted = true;
+
+    setConnecting();
 
     const refreshStatus = () => {
       void statusApi
         .get()
         .then((status) => {
-          if (mounted) setConnection({ phase: 'connected', status });
+          if (mounted) setConnected(status);
         })
         .catch((error: unknown) => {
           if (mounted) {
-            setConnection({ phase: 'disconnected', error: readableError(error) });
+            setDisconnected(readableError(error));
           }
         });
     };
@@ -47,24 +49,24 @@ export function StatusBar() {
       mounted = false;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [setConnected, setConnecting, setDisconnected]);
 
-  const isConnected = connection.phase === 'connected';
+  const isConnected = phase === 'connected' && serverStatus !== null;
   const connectionLabel =
-    connection.phase === 'connecting'
+    phase === 'connecting'
       ? '连接中…'
-      : connection.phase === 'connected'
+      : phase === 'connected'
         ? '已连接'
         : '未连接';
   const storageLabel = isConnected
-    ? `${connection.status.storage} · ${connection.status.wal ? 'WAL' : 'journal'}`
+    ? `${serverStatus.storage} · ${serverStatus.wal ? 'WAL' : 'journal'}`
     : '—';
-  const dotClass = isConnected ? styles.ok : connection.phase === 'disconnected' ? styles.error : '';
+  const dotClass = isConnected ? styles.ok : phase === 'disconnected' ? styles.error : '';
 
   return (
     <footer className={styles.statusbar}>
       <span className={`${styles.dot} ${dotClass}`} aria-hidden="true" />
-      <span title={connection.phase === 'disconnected' ? connection.error : undefined}>
+      <span title={phase === 'disconnected' ? (connectionError ?? undefined) : undefined}>
         {connectionLabel}
       </span>
       <span className={styles.sep} aria-hidden="true" />

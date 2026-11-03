@@ -9,6 +9,8 @@ package cn.yhjyhj.weaver.server.api.dto;
  * @param workspace 当前工作区的绝对路径
  * @param maxSteps 单轮 Agent 允许执行的最大步数
  * @param uptimeSeconds JVM 进程已运行的秒数
+ * @param model 当前配置的模型名
+ * @param protocol 当前模型协议
  */
 public record ServerStatus(
         String status,
@@ -16,4 +18,6 @@ public record ServerStatus(
         boolean wal,
         String workspace,
         int maxSteps,
-        long uptimeSeconds) {}
+        long uptimeSeconds,
+        String model,
+        String protocol) {}

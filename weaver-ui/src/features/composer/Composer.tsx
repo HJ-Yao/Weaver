@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useServerStatusStore } from '@/app/server-status-store';
 import { useUiStore } from '@/app/ui-store';
 import { useSessionStore } from '@/entities/session/store';
 import { Dropdown, type DropdownOption } from '@/shared/ui/Dropdown';
@@ -23,25 +24,11 @@ const WORKSPACES: DropdownOption[] = [
   },
 ];
 
-const MODELS: DropdownOption[] = [
-  {
-    id: 'deepseek-chat',
-    label: 'DeepSeek Chat',
-    meta: 'openai-chat-completions · deepseek-chat',
-  },
-  {
-    id: 'deepseek-reasoner',
-    label: 'DeepSeek Reasoner',
-    meta: 'openai-chat-completions · deepseek-reasoner',
-  },
-  { id: 'claude-sonnet', label: 'Claude Sonnet', meta: 'anthropic-messages · claude-sonnet-4' },
-  { id: 'gpt-4.1', label: 'GPT-4.1', meta: 'openai-chat-completions · gpt-4.1' },
-];
-
 /**
  * 消息输入区。
  *
- * 仅持有草稿文本。发送动作委托给会话 store，因此输入区无需感知模拟流还是真实流。
+ * 仅持有草稿和工作区选择；当前模型从服务端状态 store 只读获取。
+ * 发送动作委托给会话 store，因此输入区无需感知模拟流还是真实流。
  */
 export function Composer() {
   const sendMessage = useSessionStore((state) => state.sendMessage);
@@ -50,10 +37,10 @@ export function Composer() {
   const approvalMode = useUiStore((state) => state.approvalMode);
   const cycleApprovalMode = useUiStore((state) => state.cycleApprovalMode);
   const showToast = useUiStore((state) => state.showToast);
+  const serverStatus = useServerStatusStore((state) => state.status);
 
   const [draft, setDraft] = useState('');
   const [workspace, setWorkspace] = useState(WORKSPACES[0].id);
-  const [model, setModel] = useState(MODELS[0].id);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // 随内容增高，达到 CSS 最大高度后改为滚动。
@@ -143,14 +130,10 @@ export function Composer() {
       <div className={styles.actions}>
         <span className={styles.hint}>Enter 发送 · Shift+Enter 换行</span>
         <span className={styles.right}>
-          <Dropdown
-            label="模型"
-            options={MODELS}
-            value={model}
-            onChange={setModel}
-            placement="up"
-            align="right"
-          />
+          {/* TODO(M2): 多模型配置接入后恢复为下拉；当前只展示服务端正在使用的模型。 */}
+          <span className={styles.modelLabel} title={serverStatus?.protocol}>
+            {serverStatus?.model ?? '—'}
+          </span>
           <button
             type="button"
             className={styles.send}
