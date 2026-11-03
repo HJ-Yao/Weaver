@@ -5,16 +5,17 @@ import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.approval.InMemoryApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.RuleBasedApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
-import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import cn.yhjyhj.weaver.core.tool.builtin.FileTool;
 import cn.yhjyhj.weaver.core.tool.builtin.GitTool;
 import cn.yhjyhj.weaver.core.tool.builtin.ShellTool;
-import cn.yhjyhj.weaver.server.model.AnthropicMessagesModelClient;
-import cn.yhjyhj.weaver.server.model.OpenAiChatCompletionsModelClient;
 import cn.yhjyhj.weaver.server.service.RunService;
 import cn.yhjyhj.weaver.server.service.RunServiceDependencies;
 import cn.yhjyhj.weaver.server.service.SessionService;
+import cn.yhjyhj.weaver.server.settings.DefaultModelClientProvider;
+import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
+import cn.yhjyhj.weaver.server.settings.ModelSettingsService;
+import cn.yhjyhj.weaver.server.settings.ModelSettingsStore;
 import cn.yhjyhj.weaver.server.store.SqliteEventStore;
 import cn.yhjyhj.weaver.server.workspace.WorkspaceDiffService;
 import java.nio.file.Path;
@@ -85,11 +86,55 @@ public class WeaverConfig {
     }
 
     /**
+     * 创建固定位于用户主目录下的模型设置文件存储。
+     *
+     * @return 使用 {@code ~/.weaver/config.json} 的存储
+     */
+    @Bean
+    public ModelSettingsStore modelSettingsStore() {
+        Path configPath =
+                Path.of(System.getProperty("user.home"), ".weaver", "config.json");
+        return new ModelSettingsStore(configPath);
+    }
+
+    /**
+     * 创建按持久化激活配置解析并缓存客户端的 provider。
+     *
+     * @param store 模型设置存储
+     * @param properties 环境模型与生成参数
+     * @return 感知配置变化的模型客户端 provider
+     */
+    @Bean
+    public ModelClientProvider modelClientProvider(
+            ModelSettingsStore store, WeaverProperties properties) {
+        return new DefaultModelClientProvider(
+                () -> ModelSettingsService.resolveActive(
+                        store.load(), properties.model()),
+                properties.model());
+    }
+
+    /**
+     * 创建模型设置服务。
+     *
+     * @param store 模型设置存储
+     * @param properties 环境模型兜底配置
+     * @param modelProvider 模型客户端缓存
+     * @return 模型设置业务服务
+     */
+    @Bean
+    public ModelSettingsService modelSettingsService(
+            ModelSettingsStore store,
+            WeaverProperties properties,
+            ModelClientProvider modelProvider) {
+        return new ModelSettingsService(store, properties, modelProvider);
+    }
+
+    /**
      * 使用进程级依赖与应用配置创建运行服务。
      *
      * @param sessions 会话元数据服务
      * @param eventStore 会话事件事实源
-     * @param model 模型客户端
+     * @param modelProvider 每轮解析当前模型的 provider
      * @param tools 工具注册表
      * @param approvalPolicy 工具审批策略
      * @param approvalGrants 会话审批授权记录
@@ -100,7 +145,7 @@ public class WeaverConfig {
     public RunService runService(
             SessionService sessions,
             SessionEventStore eventStore,
-            ModelClient model,
+            ModelClientProvider modelProvider,
             ToolRegistry tools,
             ApprovalPolicy approvalPolicy,
             ApprovalGrantStore approvalGrants,
@@ -108,7 +153,7 @@ public class WeaverConfig {
         return new RunService(new RunServiceDependencies(
                 sessions,
                 eventStore,
-                model,
+                modelProvider,
                 tools,
                 approvalPolicy,
                 approvalGrants,
@@ -117,22 +162,4 @@ public class WeaverConfig {
                 RunServiceDependencies.defaultEmitterFactory()));
     }
 
-    /**
-     * 按配置协议创建模型客户端。
-     *
-     * @param properties Weaver 运行与模型配置
-     * @return 当前配置对应的模型客户端
-     * @throws IllegalArgumentException 协议不受支持时抛出
-     */
-    @Bean
-    public ModelClient modelClient(WeaverProperties properties) {
-        return switch (properties.model().protocol()) {
-            case "openai-chat-completions" ->
-                    new OpenAiChatCompletionsModelClient(properties.model());
-            case "anthropic-messages" ->
-                    new AnthropicMessagesModelClient(properties.model());
-            default -> throw new IllegalArgumentException(
-                    "unsupported model protocol: " + properties.model().protocol());
-        };
-    }
 }

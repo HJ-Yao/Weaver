@@ -8,13 +8,14 @@ import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.loop.RunLoop;
-import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
+import cn.yhjyhj.weaver.server.api.SettingsController;
 import cn.yhjyhj.weaver.server.api.SessionController;
 import cn.yhjyhj.weaver.server.config.WeaverProperties;
-import cn.yhjyhj.weaver.server.model.OpenAiChatCompletionsModelClient;
 import cn.yhjyhj.weaver.server.service.RunService;
 import cn.yhjyhj.weaver.server.service.SessionService;
+import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
+import cn.yhjyhj.weaver.server.settings.ModelSettingsService;
 import cn.yhjyhj.weaver.server.store.SqliteEventStore;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -67,10 +68,12 @@ class WeaverApplicationTest {
         assertTrue(context.getBean(ApprovalGrantStore.class) != null);
         assertEquals(0, context.getBeanNamesForType(ApprovalGate.class).length);
         assertEquals(300, properties.approval().timeoutSeconds());
-        assertTrue(context.getBean(ModelClient.class) instanceof OpenAiChatCompletionsModelClient);
+        assertTrue(context.getBean(ModelClientProvider.class) != null);
+        assertTrue(context.getBean(ModelSettingsService.class) != null);
         assertTrue(context.getBean(SessionService.class) != null);
         assertTrue(context.getBean(RunService.class) != null);
         assertTrue(context.getBean(SessionController.class) != null);
+        assertTrue(context.getBean(SettingsController.class) != null);
         assertEquals(0, context.getBeanNamesForType(RunLoop.class).length);
     }
 }

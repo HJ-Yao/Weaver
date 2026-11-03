@@ -22,6 +22,7 @@ import cn.yhjyhj.weaver.core.tool.Tool;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import cn.yhjyhj.weaver.server.api.dto.SessionSummary;
 import cn.yhjyhj.weaver.server.model.EchoModelClient;
+import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
@@ -59,7 +60,7 @@ class RunServiceTest {
         RunService service = new RunService(dependencies(
                 sessions,
                 store,
-                virtualThreadProbe,
+                ModelClientProvider.fixed(virtualThreadProbe),
                 ToolRegistry.empty(),
                 300,
                 () -> emitter));
@@ -87,7 +88,11 @@ class RunServiceTest {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
         SessionService sessions = new SessionService(store);
         RunService service = new RunService(dependencies(
-                sessions, store, new EchoModelClient(), ToolRegistry.empty(), 300));
+                sessions,
+                store,
+                ModelClientProvider.fixed(new EchoModelClient()),
+                ToolRegistry.empty(),
+                300));
 
         ResponseStatusException thrown = assertThrows(
                 ResponseStatusException.class,
@@ -105,7 +110,7 @@ class RunServiceTest {
         RunService service = new RunService(dependencies(
                 sessions,
                 store,
-                approvalThenResponseModel(),
+                ModelClientProvider.fixed(approvalThenResponseModel()),
                 new ToolRegistry(List.of(approvalTool())),
                 5,
                 () -> emitter));
@@ -132,7 +137,11 @@ class RunServiceTest {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
         SessionService sessions = new SessionService(store);
         RunService service = new RunService(dependencies(
-                sessions, store, new EchoModelClient(), ToolRegistry.empty(), 300));
+                sessions,
+                store,
+                ModelClientProvider.fixed(new EchoModelClient()),
+                ToolRegistry.empty(),
+                300));
 
         assertFalse(service.resolveApproval("missing-session", "call-1", true));
     }
@@ -158,7 +167,7 @@ class RunServiceTest {
         RunService service = new RunService(dependencies(
                 sessions,
                 store,
-                blockingModel,
+                ModelClientProvider.fixed(blockingModel),
                 ToolRegistry.empty(),
                 5,
                 () -> emitter));
@@ -181,7 +190,11 @@ class RunServiceTest {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
         SessionService sessions = new SessionService(store);
         RunService service = new RunService(dependencies(
-                sessions, store, new EchoModelClient(), ToolRegistry.empty(), 300));
+                sessions,
+                store,
+                ModelClientProvider.fixed(new EchoModelClient()),
+                ToolRegistry.empty(),
+                300));
 
         assertFalse(service.cancel("missing-session"));
     }
@@ -207,7 +220,7 @@ class RunServiceTest {
         RunService service = new RunService(dependencies(
                 sessions,
                 store,
-                blockingModel,
+                ModelClientProvider.fixed(blockingModel),
                 ToolRegistry.empty(),
                 30,
                 () -> emitter));
@@ -258,7 +271,7 @@ class RunServiceTest {
         RunService service = new RunService(dependencies(
                 sessions,
                 store,
-                neverEndingModel,
+                ModelClientProvider.fixed(neverEndingModel),
                 ToolRegistry.empty(),
                 30,
                 () -> emitter));
@@ -290,7 +303,12 @@ class RunServiceTest {
             throw new IllegalStateException("boom");
         };
         RunService service = new RunService(dependencies(
-                sessions, store, failingModel, ToolRegistry.empty(), 30, () -> emitter));
+                sessions,
+                store,
+                ModelClientProvider.fixed(failingModel),
+                ToolRegistry.empty(),
+                30,
+                () -> emitter));
 
         service.run(summary.id(), "hello");
 
@@ -308,7 +326,7 @@ class RunServiceTest {
         RunService service = new RunService(dependencies(
                 sessions,
                 store,
-                new EchoModelClient(),
+                ModelClientProvider.fixed(new EchoModelClient()),
                 ToolRegistry.empty(),
                 30,
                 () -> emitter));
@@ -344,7 +362,7 @@ class RunServiceTest {
         RunService service = new RunService(dependencies(
                 sessions,
                 store,
-                approvalThenResponseModel(),
+                ModelClientProvider.fixed(approvalThenResponseModel()),
                 new ToolRegistry(List.of(approvalTool())),
                 30,
                 () -> emitter));
@@ -368,13 +386,13 @@ class RunServiceTest {
     private static RunServiceDependencies dependencies(
             SessionService sessions,
             SessionEventStore store,
-            ModelClient model,
+            ModelClientProvider modelProvider,
             ToolRegistry tools,
             int approvalTimeoutSeconds) {
         return dependencies(
                 sessions,
                 store,
-                model,
+                modelProvider,
                 tools,
                 approvalTimeoutSeconds,
                 RunServiceDependencies.defaultEmitterFactory());
@@ -383,14 +401,14 @@ class RunServiceTest {
     private static RunServiceDependencies dependencies(
             SessionService sessions,
             SessionEventStore store,
-            ModelClient model,
+            ModelClientProvider modelProvider,
             ToolRegistry tools,
             int approvalTimeoutSeconds,
             Supplier<SseEmitter> emitterFactory) {
         return new RunServiceDependencies(
                 sessions,
                 store,
-                model,
+                modelProvider,
                 tools,
                 RuleBasedApprovalPolicy.defaults(),
                 ApprovalGrantStore.none(),

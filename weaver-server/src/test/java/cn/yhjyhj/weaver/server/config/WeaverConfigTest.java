@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import cn.yhjyhj.weaver.server.config.WeaverProperties.ModelProperties;
 import cn.yhjyhj.weaver.server.model.AnthropicMessagesModelClient;
 import cn.yhjyhj.weaver.server.model.OpenAiChatCompletionsModelClient;
+import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
+import cn.yhjyhj.weaver.server.settings.ModelSettingsStore;
 import java.net.URI;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
@@ -30,7 +32,7 @@ class WeaverConfigTest {
 
         assertInstanceOf(
                 OpenAiChatCompletionsModelClient.class,
-                new WeaverConfig().modelClient(properties));
+                provider(properties).current());
     }
 
     @Test
@@ -39,7 +41,7 @@ class WeaverConfigTest {
 
         assertInstanceOf(
                 AnthropicMessagesModelClient.class,
-                new WeaverConfig().modelClient(properties));
+                provider(properties).current());
     }
 
     @Test
@@ -48,7 +50,13 @@ class WeaverConfigTest {
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new WeaverConfig().modelClient(properties));
+                () -> provider(properties).current());
+    }
+
+    private static ModelClientProvider provider(WeaverProperties properties) {
+        return new WeaverConfig().modelClientProvider(
+                new ModelSettingsStore(Path.of("target", "missing-config.json")),
+                properties);
     }
 
     private static WeaverProperties properties(String protocol) {

@@ -11,6 +11,7 @@ import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
+import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import java.time.Duration;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,7 @@ class RunServiceDependenciesTest {
         ModelClient model = request -> {
             throw new UnsupportedOperationException();
         };
+        ModelClientProvider modelProvider = ModelClientProvider.fixed(model);
         ToolRegistry tools = ToolRegistry.empty();
         ApprovalPolicy approvalPolicy = RuleBasedApprovalPolicy.defaults();
         ApprovalGrantStore approvalGrants = ApprovalGrantStore.none();
@@ -61,7 +63,7 @@ class RunServiceDependenciesTest {
                         () -> new RunServiceDependencies(
                                 null,
                                 eventStore,
-                                model,
+                                modelProvider,
                                 tools,
                                 approvalPolicy,
                                 approvalGrants,
@@ -73,7 +75,7 @@ class RunServiceDependenciesTest {
                         () -> new RunServiceDependencies(
                                 sessions,
                                 null,
-                                model,
+                                modelProvider,
                                 tools,
                                 approvalPolicy,
                                 approvalGrants,
@@ -97,7 +99,7 @@ class RunServiceDependenciesTest {
                         () -> new RunServiceDependencies(
                                 sessions,
                                 eventStore,
-                                model,
+                                modelProvider,
                                 null,
                                 approvalPolicy,
                                 approvalGrants,
@@ -109,7 +111,7 @@ class RunServiceDependenciesTest {
                         () -> new RunServiceDependencies(
                                 sessions,
                                 eventStore,
-                                model,
+                                modelProvider,
                                 tools,
                                 null,
                                 approvalGrants,
@@ -121,7 +123,7 @@ class RunServiceDependenciesTest {
                         () -> new RunServiceDependencies(
                                 sessions,
                                 eventStore,
-                                model,
+                                modelProvider,
                                 tools,
                                 approvalPolicy,
                                 null,
@@ -133,7 +135,7 @@ class RunServiceDependenciesTest {
                         () -> new RunServiceDependencies(
                                 sessions,
                                 eventStore,
-                                model,
+                                modelProvider,
                                 tools,
                                 approvalPolicy,
                                 approvalGrants,
@@ -145,7 +147,7 @@ class RunServiceDependenciesTest {
                         () -> new RunServiceDependencies(
                                 sessions,
                                 eventStore,
-                                model,
+                                modelProvider,
                                 tools,
                                 approvalPolicy,
                                 approvalGrants,
@@ -167,9 +169,9 @@ class RunServiceDependenciesTest {
         return new RunServiceDependencies(
                 sessions,
                 eventStore,
-                request -> {
+                ModelClientProvider.fixed(request -> {
                     throw new UnsupportedOperationException();
-                },
+                }),
                 ToolRegistry.empty(),
                 RuleBasedApprovalPolicy.defaults(),
                 ApprovalGrantStore.none(),

@@ -2,6 +2,8 @@ package cn.yhjyhj.weaver.server.api;
 
 import cn.yhjyhj.weaver.server.api.dto.ServerStatus;
 import cn.yhjyhj.weaver.server.config.WeaverProperties;
+import cn.yhjyhj.weaver.server.settings.ActiveModel;
+import cn.yhjyhj.weaver.server.settings.ModelSettingsService;
 import java.lang.management.ManagementFactory;
 import java.util.Objects;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,14 +16,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class StatusController {
 
     private final WeaverProperties properties; // 提供工作区与单轮步数上限
+    private final ModelSettingsService settings; // 当前激活模型设置的解析入口
 
     /**
      * 创建服务状态控制器。
      *
      * @param properties 已校验的 Weaver 运行配置
+     * @param settings 模型设置服务
      */
-    public StatusController(WeaverProperties properties) {
+    public StatusController(
+            WeaverProperties properties, ModelSettingsService settings) {
         this.properties = Objects.requireNonNull(properties, "properties");
+        this.settings = Objects.requireNonNull(settings, "settings");
     }
 
     /**
@@ -31,6 +37,7 @@ public class StatusController {
      */
     @GetMapping
     public ServerStatus status() {
+        ActiveModel activeModel = settings.activeModel();
         return new ServerStatus(
                 "ok",
                 "sqlite",
@@ -38,7 +45,7 @@ public class StatusController {
                 properties.workspace().toAbsolutePath().normalize().toString(),
                 properties.maxSteps(),
                 ManagementFactory.getRuntimeMXBean().getUptime() / 1000,
-                properties.model().model(),
-                properties.model().protocol());
+                activeModel.model(),
+                activeModel.protocol());
     }
 }

@@ -7,6 +7,7 @@ import cn.yhjyhj.weaver.core.loop.RunLoop;
 import cn.yhjyhj.weaver.core.loop.RunLoopConfig;
 import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
+import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import cn.yhjyhj.weaver.server.sse.SseApprovalGate;
 import cn.yhjyhj.weaver.server.sse.SseChannel;
 import cn.yhjyhj.weaver.server.sse.SseStreamSink;
@@ -28,7 +29,7 @@ public final class RunService {
 
     private final SessionService sessions; // 会话存在性边界
     private final SessionEventStore eventStore; // 运行事实源
-    private final ModelClient model; // 当前模型客户端
+    private final ModelClientProvider modelProvider; // 每轮解析当前模型的入口
     private final ToolRegistry tools; // 进程级工具注册表
     private final ApprovalPolicy approvalPolicy; // 工具审批策略
     private final ApprovalGrantStore approvalGrants; // 会话审批授权记录
@@ -48,7 +49,7 @@ public final class RunService {
                 Objects.requireNonNull(dependencies, "dependencies");
         this.sessions = validatedDependencies.sessions();
         this.eventStore = validatedDependencies.eventStore();
-        this.model = validatedDependencies.model();
+        this.modelProvider = validatedDependencies.modelProvider();
         this.tools = validatedDependencies.tools();
         this.approvalPolicy = validatedDependencies.approvalPolicy();
         this.approvalGrants = validatedDependencies.approvalGrants();
@@ -174,6 +175,7 @@ public final class RunService {
             SseChannel channel,
             ActiveRun activeRun) {
         SseStreamSink streamSink = channel.streamSink();
+        ModelClient model = modelProvider.current();
         RunLoop loop = new RunLoop(
                 model,
                 channel.withToolResultRelay(eventStore),
