@@ -78,6 +78,11 @@ export interface SessionEventDto {
   callId: string | null;
   approved: boolean | null;
   aborted: boolean | null;
+  content: string | null;
+  argumentsJson: string | null;
+  resultContent: string | null;
+  resultError: boolean | null;
+  reason: string | null;
 }
 
 export const sessionApi = {
