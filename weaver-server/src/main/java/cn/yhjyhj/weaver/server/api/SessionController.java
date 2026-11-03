@@ -3,6 +3,7 @@ package cn.yhjyhj.weaver.server.api;
 import cn.yhjyhj.weaver.server.api.dto.CreateSessionRequest;
 import cn.yhjyhj.weaver.server.api.dto.SendMessageRequest;
 import cn.yhjyhj.weaver.server.api.dto.SessionDetail;
+import cn.yhjyhj.weaver.server.api.dto.SessionEventView;
 import cn.yhjyhj.weaver.server.api.dto.SessionSummary;
 import cn.yhjyhj.weaver.server.service.RunService;
 import cn.yhjyhj.weaver.server.service.SessionService;
@@ -74,6 +75,19 @@ public class SessionController {
     public SessionDetail detail(@PathVariable("id") String id) {
         SessionSummary summary = requireSession(id);
         return new SessionDetail(summary, sessions.snapshot(id));
+    }
+
+    /**
+     * 返回会话的真实事件时间线。
+     *
+     * @param id 会话标识
+     * @return 按 seq 升序排列的事件视图
+     * @throws ResponseStatusException 会话不存在时返回 404
+     */
+    @GetMapping("/{id}/events")
+    public List<SessionEventView> events(@PathVariable("id") String id) {
+        requireSession(id);
+        return SessionEventViewMapper.from(sessions.events(id));
     }
 
     /**

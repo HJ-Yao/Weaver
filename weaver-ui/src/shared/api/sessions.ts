@@ -61,6 +61,25 @@ export interface SessionDetailDto {
   snapshot: SessionSnapshotDto;
 }
 
+/** `cn.yhjyhj.weaver.server.api.dto.SessionEventView` */
+export interface SessionEventDto {
+  seq: number;
+  type:
+    | 'USER_MESSAGE'
+    | 'ASSISTANT_MESSAGE'
+    | 'TOOL_MESSAGE'
+    | 'TOOL_STARTED'
+    | 'TOOL_COMPLETED'
+    | 'APPROVAL_REQUESTED'
+    | 'APPROVAL_RESOLVED'
+    | 'RUN_FINISHED';
+  role: string | null;
+  toolName: string | null;
+  callId: string | null;
+  approved: boolean | null;
+  aborted: boolean | null;
+}
+
 export const sessionApi = {
   /** GET /sessions：供侧栏使用的元数据。 */
   list: () => request<SessionSummaryDto[]>('/sessions'),
@@ -74,6 +93,9 @@ export const sessionApi = {
 
   /** GET /sessions/{id}：元数据及回放快照。 */
   detail: (id: string) => request<SessionDetailDto>(`/sessions/${encodeURIComponent(id)}`),
+
+  /** GET /sessions/{id}/events：按 seq 升序返回真实事件时间线。 */
+  events: (id: string) => request<SessionEventDto[]>(`/sessions/${encodeURIComponent(id)}/events`),
 
   /** POST /sessions/{id}/run/cancel：请求中止当前运行。 */
   cancelRun: (id: string) =>

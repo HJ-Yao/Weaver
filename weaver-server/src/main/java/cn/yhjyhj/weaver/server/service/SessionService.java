@@ -3,6 +3,7 @@ package cn.yhjyhj.weaver.server.service;
 import cn.yhjyhj.weaver.core.events.SessionEvents;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionSnapshot;
+import cn.yhjyhj.weaver.core.events.StoredEvent;
 import cn.yhjyhj.weaver.server.api.dto.SessionSummary;
 import java.time.Instant;
 import java.util.Comparator;
@@ -86,5 +87,15 @@ public class SessionService {
      */
     public SessionSnapshot snapshot(String id) {
         return SessionEvents.replay(store.from(id, 0L));
+    }
+
+    /**
+     * 从 seq 0 读取会话的真实事件序列。
+     *
+     * @param id 会话标识
+     * @return 按 seq 升序排列的事件；会话不存在或没有事件时为空列表
+     */
+    public List<StoredEvent> events(String id) {
+        return store.from(id, 0L);
     }
 }

@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import cn.yhjyhj.weaver.core.events.SessionSnapshot;
+import cn.yhjyhj.weaver.core.events.SessionEvent;
+import cn.yhjyhj.weaver.core.events.StoredEvent;
 import cn.yhjyhj.weaver.server.api.dto.SessionDetail;
 import cn.yhjyhj.weaver.server.api.dto.SessionSummary;
 import cn.yhjyhj.weaver.server.service.RunService;
@@ -92,6 +94,36 @@ class SessionControllerTest {
                 .andExpect(jsonPath("$.summary.id").value("session-1"))
                 .andExpect(jsonPath("$.snapshot.messages[0].content").value("hello"))
                 .andExpect(jsonPath("$.snapshot.lastSeq").value(1));
+    }
+
+    @Test
+    void returnsSessionEventsInSequenceOrder() throws Exception {
+        when(sessionService.find("session-1")).thenReturn(Optional.of(SUMMARY));
+        when(sessionService.events("session-1")).thenReturn(List.of(
+                new StoredEvent(
+                        1L, new SessionEvent.MessageAdded(SessionEvent.Role.USER, "hello")),
+                new StoredEvent(
+                        2L, new SessionEvent.RunFinished(false))));
+
+        mockMvc.perform(get("/api/sessions/session-1/events"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$[0].seq").value(1))
+                .andExpect(jsonPath("$[0].type").value("USER_MESSAGE"))
+                .andExpect(jsonPath("$[0].role").value("USER"))
+                .andExpect(jsonPath("$[1].seq").value(2))
+                .andExpect(jsonPath("$[1].type").value("RUN_FINISHED"))
+                .andExpect(jsonPath("$[1].aborted").value(false));
+    }
+
+    @Test
+    void returnsNotFoundWhenListingEventsForUnknownSession() throws Exception {
+        when(sessionService.find("missing")).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/sessions/missing/events"))
+                .andExpect(status().isNotFound());
+
+        verify(sessionService, never()).events("missing");
     }
 
     @Test
