@@ -85,6 +85,16 @@ export interface SessionEventDto {
   reason: string | null;
 }
 
+/** 运行中输入的投递目标。 */
+export type InboxTargetDto = 'STEP' | 'TURN';
+
+/** 运行中尚未消费的输入条目。 */
+export interface InboxEntryDto {
+  id: string;
+  target: InboxTargetDto;
+  content: string;
+}
+
 export const sessionApi = {
   /** GET /sessions：供侧栏使用的元数据。 */
   list: () => request<SessionSummaryDto[]>('/sessions'),
@@ -115,5 +125,29 @@ export const sessionApi = {
     request<void>(
       `/sessions/${encodeURIComponent(sessionId)}/approvals/${encodeURIComponent(callId)}`,
       { method: 'POST', body: JSON.stringify({ approved }) },
+    ),
+};
+
+export const inboxApi = {
+  /** POST /sessions/{id}/inbox：运行中投递，成功返回 202。 */
+  enqueue: (sessionId: string, content: string, target: InboxTargetDto) =>
+    request<InboxEntryDto>(`/sessions/${encodeURIComponent(sessionId)}/inbox`, {
+      method: 'POST',
+      body: JSON.stringify({ content, target }),
+    }),
+  /** GET /sessions/{id}/inbox：当前待发送条目。 */
+  list: (sessionId: string) =>
+    request<InboxEntryDto[]>(`/sessions/${encodeURIComponent(sessionId)}/inbox`),
+  /** PATCH /sessions/{id}/inbox/{entryId}：修改文本。 */
+  edit: (sessionId: string, entryId: string, content: string) =>
+    request<InboxEntryDto>(
+      `/sessions/${encodeURIComponent(sessionId)}/inbox/${encodeURIComponent(entryId)}`,
+      { method: 'PATCH', body: JSON.stringify({ content }) },
+    ),
+  /** DELETE /sessions/{id}/inbox/{entryId}：撤回。 */
+  remove: (sessionId: string, entryId: string) =>
+    request<void>(
+      `/sessions/${encodeURIComponent(sessionId)}/inbox/${encodeURIComponent(entryId)}`,
+      { method: 'DELETE' },
     ),
 };

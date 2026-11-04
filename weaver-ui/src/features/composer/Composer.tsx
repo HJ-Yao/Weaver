@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useServerStatusStore } from '@/app/server-status-store';
 import { useUiStore } from '@/app/ui-store';
 import { useSessionStore } from '@/entities/session/store';
+import type { InboxTargetDto } from '@/shared/api/sessions';
 import { Dropdown, type DropdownOption } from '@/shared/ui/Dropdown';
 import { Icon } from '@/shared/ui/Icon';
 import styles from './Composer.module.css';
+import { QueuedMessages } from './QueuedMessages';
 
 /**
  * TODO(M2): 这些目录项应来自服务端（工作区注册表和 `~/.weaver/config.json`）。
@@ -32,6 +34,10 @@ const WORKSPACES: DropdownOption[] = [
  */
 export function Composer() {
   const sendMessage = useSessionStore((state) => state.sendMessage);
+  const enqueueMessage = useSessionStore((state) => state.enqueueMessage);
+  const removePending = useSessionStore((state) => state.removePending);
+  const editPending = useSessionStore((state) => state.editPending);
+  const pending = useSessionStore((state) => state.pending);
   const cancelRun = useSessionStore((state) => state.cancelRun);
   const running = useSessionStore((state) => state.running);
   const approvalMode = useUiStore((state) => state.approvalMode);
@@ -51,18 +57,27 @@ export function Composer() {
     textarea.style.height = `${Math.min(textarea.scrollHeight, 180)}px`;
   }, [draft]);
 
-  const submit = () => {
-    if (!draft.trim() || running) return;
-    sendMessage(draft);
-    setDraft('');
-  };
+  const queueMessage = async (target: InboxTargetDto) => {
+    const content = draft;
+    if (!content.trim()) return;
 
-  const onPrimaryAction = () => {
-    if (running) {
-      cancelRun();
+    const accepted = await enqueueMessage(content, target);
+    if (!accepted) {
+      showToast('投递失败：运行可能已结束或待发送队列已满。');
       return;
     }
-    submit();
+    // 请求期间若用户继续输入，只清空已经投递出去的那份文本。
+    setDraft((current) => (current === content ? '' : current));
+  };
+
+  const submit = () => {
+    if (!draft.trim()) return;
+    if (running) {
+      void queueMessage('TURN');
+      return;
+    }
+    sendMessage(draft);
+    setDraft('');
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -70,6 +85,10 @@ export function Composer() {
     // IME 候选窗口打开时不得发送。
     if (event.nativeEvent.isComposing) return;
     event.preventDefault();
+    if (running && (event.ctrlKey || event.metaKey)) {
+      void queueMessage('STEP');
+      return;
+    }
     submit();
   };
 
@@ -116,6 +135,8 @@ export function Composer() {
         </button>
       </div>
 
+      <QueuedMessages entries={pending} onRemove={removePending} onEdit={editPending} />
+
       <textarea
         ref={textareaRef}
         className={styles.input}
@@ -128,20 +149,43 @@ export function Composer() {
       />
 
       <div className={styles.actions}>
-        <span className={styles.hint}>Enter 发送 · Shift+Enter 换行</span>
+        <span className={styles.hint}>
+          {running
+            ? 'Enter 排队 · Ctrl+Enter 插话 · Shift+Enter 换行'
+            : 'Enter 发送 · Shift+Enter 换行'}
+        </span>
         <span className={styles.right}>
           {/* TODO(M2): 多模型配置接入后恢复为下拉；当前只展示服务端正在使用的模型。 */}
           <span className={styles.modelLabel} title={serverStatus?.protocol}>
             {serverStatus?.model ?? '—'}
           </span>
-          <button
-            type="button"
-            className={styles.send}
-            disabled={!running && !draft.trim()}
-            onClick={onPrimaryAction}
-          >
-            {running ? '停止' : '发送'}
-          </button>
+          {running ? (
+            <span className={styles.actionGroup}>
+              <button
+                type="button"
+                className={styles.send}
+                disabled={!draft.trim()}
+                onClick={() => void queueMessage('STEP')}
+              >
+                插话
+              </button>
+              <button
+                type="button"
+                className={styles.secondaryAction}
+                disabled={!draft.trim()}
+                onClick={() => void queueMessage('TURN')}
+              >
+                排队
+              </button>
+              <button type="button" className={styles.stop} onClick={cancelRun}>
+                停止
+              </button>
+            </span>
+          ) : (
+            <button type="button" className={styles.send} disabled={!draft.trim()} onClick={submit}>
+              发送
+            </button>
+          )}
         </span>
       </div>
     </div>

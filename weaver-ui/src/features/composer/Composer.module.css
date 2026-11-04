@@ -43,6 +43,116 @@
   color: var(--text);
 }
 
+.queued {
+  margin-bottom: 7px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.queuedHeader {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font: 10.5px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.queuedCount {
+  display: grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--panel-2);
+  color: var(--faint);
+}
+
+.queuedList {
+  max-height: 140px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.queuedItem {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 9px;
+}
+
+.queuedItem + .queuedItem {
+  border-top: 1px solid var(--border);
+}
+
+.queuedBadge {
+  flex: none;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  font: 10px/1.2 var(--font-mono);
+}
+
+.queuedBadgeStep {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+
+.queuedBadgeTurn {
+  background: var(--panel-2);
+  color: var(--muted);
+}
+
+.queuedText,
+.queuedEditor {
+  min-width: 0;
+  flex: 1;
+}
+
+.queuedText {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queuedEditor {
+  height: 26px;
+  padding: 3px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.queuedEditor:focus {
+  border-color: var(--accent);
+}
+
+.queuedAction {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.queuedAction:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
 .input {
   display: block;
   width: 100%;
@@ -84,6 +194,12 @@
   gap: var(--space-3);
 }
 
+.actionGroup {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
 .modelLabel {
   max-width: 180px;
   overflow: hidden;
@@ -107,6 +223,36 @@
 }
 
 .send:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.secondaryAction,
+.stop {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.secondaryAction {
+  background: var(--panel-2);
+}
+
+.stop {
+  background: transparent;
+  color: var(--muted);
+}
+
+.secondaryAction:hover:not(:disabled),
+.stop:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.secondaryAction:disabled {
   cursor: default;
   opacity: 0.55;
 }

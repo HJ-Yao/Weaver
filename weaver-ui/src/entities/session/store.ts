@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { sessionApi } from '@/shared/api/sessions';
+import { inboxApi, sessionApi } from '@/shared/api/sessions';
+import type { InboxEntryDto, InboxTargetDto } from '@/shared/api/sessions';
 import { streamMessage } from '@/shared/api/stream';
 import { transcriptFromSnapshot } from './model';
 import type {
@@ -28,9 +29,11 @@ interface SessionState {
   activeSessionId: string | null;
   /** 按渲染顺序排列的可见对话。 */
   transcript: TranscriptItem[];
+  /** 运行中待发送的输入，按到达顺序。 */
+  pending: InboxEntryDto[];
   /** 当前会话快照中最后一条事件序号；尚未加载时为 `0`。 */
   lastSeq: number;
-  /** 运行期间为 `true`，此时输入区保持禁用。 */
+  /** 运行期间为 `true`；输入区仍可排队或插话。 */
   running: boolean;
   /** 会话列表或详情当前的加载状态。 */
   status: SessionStatus;
@@ -44,6 +47,12 @@ interface SessionState {
   /** 创建新会话并将其设为当前会话。 */
   createSession: (title?: string) => Promise<void>;
   sendMessage: (content: string) => void;
+  /** 运行中投递一条输入；成功返回 `true`。没有活动运行时返回 `false`，由界面提示。 */
+  enqueueMessage: (content: string, target: InboxTargetDto) => Promise<boolean>;
+  /** 撤回一条待发送输入。 */
+  removePending: (id: string) => void;
+  /** 修改一条待发送输入。 */
+  editPending: (id: string, content: string) => void;
   /** 请求中止当前运行；等待服务端通过 SSE 确认。 */
   cancelRun: () => void;
   resolveApproval: (callId: string, approved: boolean) => void;
@@ -61,6 +70,18 @@ export const useSessionStore = create<SessionState>()((set, get) => {
     set((state) => ({
       transcript: state.transcript.map((item) => (item.id === id ? update(item) : item)),
     }));
+  };
+
+  /** 乐观操作失败后重新拉取服务端快照，避免界面与信箱实际状态分叉。 */
+  const restorePending = async (sessionId: string) => {
+    try {
+      const entries = await inboxApi.list(sessionId);
+      if (get().activeSessionId === sessionId) {
+        set({ pending: entries });
+      }
+    } catch {
+      // 运行可能已结束且服务端不可达；保留界面当前结果，等待下一次选择会话时恢复。
+    }
   };
 
   /** 运行结束后刷新事件序号；失败不影响运行结果，保留旧值。 */
@@ -105,6 +126,9 @@ export const useSessionStore = create<SessionState>()((set, get) => {
 
     set((state) => ({ transcript: [...state.transcript, user, reply], running: true }));
 
+    let initialEchoed = false;
+    // 运行期间切换会话时，旧运行的流仍在推送；只让当前会话消费这些事件。
+    const isCurrentSession = () => get().activeSessionId === sessionId;
     void streamMessage(sessionId, text, {
       onDelta: (delta) =>
         updateItem(reply.id, (item) =>
@@ -147,6 +171,25 @@ export const useSessionStore = create<SessionState>()((set, get) => {
         };
         set((state) => ({ transcript: [...state.transcript, approvalItem] }));
       },
+      onInbox: (entries) => {
+        if (isCurrentSession()) set({ pending: entries });
+      },
+      onUserMessage: (messageText) => {
+        if (!isCurrentSession()) return;
+        // 首条回显只用于确认本次已落库；相同文本不再叠加到乐观显示的用户消息上。
+        if (!initialEchoed && messageText === text) {
+          initialEchoed = true;
+          return;
+        }
+        initialEchoed = true;
+        const message: MessageItem = {
+          kind: 'message',
+          id: nextId('message'),
+          role: 'user',
+          content: messageText,
+        };
+        set((state) => ({ transcript: [...state.transcript, message] }));
+      },
       onAborted: () => {
         updateItem(reply.id, (item) =>
           item.kind === 'message' ? { ...item, streaming: false, stopped: true } : item,
@@ -176,7 +219,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
       })
       .finally(() => {
         // 服务端关闭响应 = 本次运行真正结束，此时才允许再次发送。
-        set({ running: false });
+        set({ running: false, pending: [] });
         void refreshLastSeq(sessionId);
       });
   };
@@ -185,6 +228,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
     sessions: [],
     activeSessionId: null,
     transcript: [],
+    pending: [],
     lastSeq: 0,
     running: false,
     status: 'idle',
@@ -215,7 +259,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
 
     selectSession: async (id) => {
       const requestId = ++detailRequestId;
-      set({ activeSessionId: id, lastSeq: 0, error: null });
+      set({ activeSessionId: id, lastSeq: 0, pending: [], error: null });
 
       try {
         const detail = await sessionApi.detail(id);
@@ -227,6 +271,15 @@ export const useSessionStore = create<SessionState>()((set, get) => {
           status: 'ready',
           error: null,
         });
+
+        try {
+          const entries = await inboxApi.list(id);
+          if (requestId === detailRequestId && get().activeSessionId === id) {
+            set({ pending: entries });
+          }
+        } catch {
+          // 没有活动运行或信箱暂不可读时保持空队列，不能让详情加载因此失败。
+        }
       } catch (error) {
         if (requestId !== detailRequestId) return;
 
@@ -247,6 +300,7 @@ export const useSessionStore = create<SessionState>()((set, get) => {
           sessions: [...state.sessions, session],
           activeSessionId: session.id,
           transcript: [],
+          pending: [],
           status: 'ready',
           error: null,
         }));
@@ -262,6 +316,56 @@ export const useSessionStore = create<SessionState>()((set, get) => {
       const text = content.trim();
       if (!text || get().running) return;
       void startSend(text);
+    },
+
+    enqueueMessage: async (content, target) => {
+      const sessionId = get().activeSessionId;
+      const text = content.trim();
+      if (!sessionId || !text) return false;
+
+      try {
+        const entry = await inboxApi.enqueue(sessionId, text, target);
+        if (get().activeSessionId === sessionId) {
+          set((state) => ({
+            pending: state.pending.some((item) => item.id === entry.id)
+              ? state.pending
+              : [...state.pending, entry],
+          }));
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
+    removePending: (id) => {
+      const sessionId = get().activeSessionId;
+      if (!sessionId || !get().pending.some((entry) => entry.id === id)) return;
+
+      set((state) => ({ pending: state.pending.filter((entry) => entry.id !== id) }));
+      void inboxApi.remove(sessionId, id).catch(() => restorePending(sessionId));
+    },
+
+    editPending: (id, content) => {
+      const sessionId = get().activeSessionId;
+      const text = content.trim();
+      if (!sessionId || !text) return;
+
+      set((state) => ({
+        pending: state.pending.map((entry) =>
+          entry.id === id ? { ...entry, content: text } : entry,
+        ),
+      }));
+      void inboxApi
+        .edit(sessionId, id, text)
+        .then((entry) => {
+          if (get().activeSessionId === sessionId) {
+            set((state) => ({
+              pending: state.pending.map((item) => (item.id === id ? entry : item)),
+            }));
+          }
+        })
+        .catch(() => restorePending(sessionId));
     },
 
     cancelRun: () => {

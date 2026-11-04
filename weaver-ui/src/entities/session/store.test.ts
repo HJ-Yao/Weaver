@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
+  InboxEntryDto,
   SessionDetailDto,
   SessionSnapshotDto,
   SessionSummaryDto,
 } from '@/shared/api/sessions';
-import { sessionApi } from '@/shared/api/sessions';
+import { inboxApi, sessionApi } from '@/shared/api/sessions';
 import type { StreamHandlers } from '@/shared/api/stream';
 import { streamMessage } from '@/shared/api/stream';
 import { transcriptFromSnapshot } from './model';
@@ -19,6 +20,12 @@ vi.mock('@/shared/api/sessions', () => ({
     resolveApproval: vi.fn(),
     cancelRun: vi.fn(),
   },
+  inboxApi: {
+    enqueue: vi.fn(),
+    list: vi.fn(),
+    edit: vi.fn(),
+    remove: vi.fn(),
+  },
 }));
 
 vi.mock('@/shared/api/stream', () => ({
@@ -26,6 +33,7 @@ vi.mock('@/shared/api/stream', () => ({
 }));
 
 const mockedSessionApi = vi.mocked(sessionApi);
+const mockedInboxApi = vi.mocked(inboxApi);
 const mockedStreamMessage = vi.mocked(streamMessage);
 const initialSessionState = useSessionStore.getState();
 
@@ -69,7 +77,9 @@ beforeEach(() => {
     status: 'idle',
     error: null,
     running: false,
+    pending: [],
   });
+  mockedInboxApi.list.mockResolvedValue([]);
 });
 
 describe('useSessionStore', () => {
@@ -82,6 +92,7 @@ describe('useSessionStore', () => {
       running: false,
       status: 'idle',
       error: null,
+      pending: [],
     });
   });
 
@@ -367,5 +378,147 @@ describe('useSessionStore', () => {
       stopped: true,
     });
     expect(state.running).toBe(false);
+  });
+
+  it('appends an enqueued inbox entry after the server accepts it', async () => {
+    const entry: InboxEntryDto = {
+      id: 'in-1',
+      target: 'TURN',
+      content: '跑完更新 README',
+    };
+    mockedInboxApi.enqueue.mockResolvedValue(entry);
+    useSessionStore.setState({ activeSessionId: firstSession.id });
+
+    await expect(
+      useSessionStore.getState().enqueueMessage(entry.content, entry.target),
+    ).resolves.toBe(true);
+
+    expect(mockedInboxApi.enqueue).toHaveBeenCalledWith(
+      firstSession.id,
+      entry.content,
+      entry.target,
+    );
+    expect(useSessionStore.getState().pending).toEqual([entry]);
+  });
+
+  it('returns false without starting a run when inbox delivery is rejected', async () => {
+    mockedInboxApi.enqueue.mockRejectedValue(new Error('run is no longer active'));
+    useSessionStore.setState({ activeSessionId: firstSession.id });
+
+    await expect(useSessionStore.getState().enqueueMessage('keep me', 'TURN')).resolves.toBe(false);
+
+    expect(useSessionStore.getState().pending).toEqual([]);
+    expect(useSessionStore.getState().running).toBe(false);
+    expect(mockedStreamMessage).not.toHaveBeenCalled();
+  });
+
+  it('loads pending inbox entries when selecting a session', async () => {
+    const entry: InboxEntryDto = {
+      id: 'in-restored',
+      target: 'STEP',
+      content: '只改 main',
+    };
+    mockedSessionApi.detail.mockResolvedValue(detailFor(firstSession));
+    mockedInboxApi.list.mockResolvedValue([entry]);
+
+    await useSessionStore.getState().selectSession(firstSession.id);
+
+    expect(mockedInboxApi.list).toHaveBeenCalledWith(firstSession.id);
+    expect(useSessionStore.getState().pending).toEqual([entry]);
+  });
+
+  it('deduplicates the optimistic user message but appends later injections', () => {
+    let handlers: StreamHandlers | undefined;
+    mockedStreamMessage.mockImplementation((_sessionId, _content, streamHandlers) => {
+      handlers = streamHandlers;
+      return new Promise<void>(() => {});
+    });
+    useSessionStore.setState({ activeSessionId: firstSession.id });
+
+    useSessionStore.getState().sendMessage('queued turn');
+    handlers?.onUserMessage?.('queued turn');
+    handlers?.onUserMessage?.('steer this step');
+
+    const userMessages = useSessionStore
+      .getState()
+      .transcript.filter((item) => item.kind === 'message' && item.role === 'user')
+      .flatMap((item) => (item.kind === 'message' ? [item.content] : []));
+    expect(userMessages).toEqual(['queued turn', 'steer this step']);
+  });
+
+  it('ignores stream callbacks from a session that is no longer active', async () => {
+    let handlers: StreamHandlers | undefined;
+    mockedStreamMessage.mockImplementation((_sessionId, _content, streamHandlers) => {
+      handlers = streamHandlers;
+      return new Promise<void>(() => {});
+    });
+    mockedSessionApi.detail.mockImplementation(async (id) =>
+      detailFor(id === secondSession.id ? secondSession : firstSession),
+    );
+    mockedInboxApi.list.mockResolvedValue([]);
+    useSessionStore.setState({ activeSessionId: firstSession.id });
+
+    useSessionStore.getState().sendMessage('first run');
+    await useSessionStore.getState().selectSession(secondSession.id);
+
+    handlers?.onUserMessage?.('steer from the old run');
+    handlers?.onInbox?.([{ id: 'in-old', target: 'STEP', content: 'old' }]);
+
+    expect(useSessionStore.getState().pending).toEqual([]);
+    expect(
+      useSessionStore
+        .getState()
+        .transcript.filter((item) => item.kind === 'message')
+        .map((item) => (item.kind === 'message' ? item.content : '')),
+    ).not.toContain('steer from the old run');
+  });
+
+  it('clears pending entries when the active stream closes', async () => {
+    let closeStream: () => void = () => undefined;
+    mockedStreamMessage.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          closeStream = resolve;
+        }),
+    );
+    useSessionStore.setState({
+      activeSessionId: firstSession.id,
+      pending: [{ id: 'in-stale', target: 'TURN', content: 'stale' }],
+    });
+
+    useSessionStore.getState().sendMessage('run');
+    closeStream();
+
+    await vi.waitFor(() => expect(useSessionStore.getState().running).toBe(false));
+    expect(useSessionStore.getState().pending).toEqual([]);
+  });
+
+  it('restores pending entries from the server when removing an entry fails', async () => {
+    const entries: InboxEntryDto[] = [
+      { id: 'in-1', target: 'STEP', content: 'first' },
+      { id: 'in-2', target: 'TURN', content: 'second' },
+    ];
+    mockedInboxApi.remove.mockRejectedValue(new Error('already consumed'));
+    mockedInboxApi.list.mockResolvedValue(entries);
+    useSessionStore.setState({ activeSessionId: firstSession.id, pending: entries });
+
+    useSessionStore.getState().removePending('in-1');
+
+    expect(useSessionStore.getState().pending).toEqual([entries[1]]);
+    await vi.waitFor(() => expect(mockedInboxApi.list).toHaveBeenCalledWith(firstSession.id));
+    await vi.waitFor(() => expect(useSessionStore.getState().pending).toEqual(entries));
+  });
+
+  it('restores pending entries from the server when editing an entry fails', async () => {
+    const entries: InboxEntryDto[] = [{ id: 'in-1', target: 'STEP', content: 'first' }];
+    mockedInboxApi.edit.mockRejectedValue(new Error('already consumed'));
+    mockedInboxApi.list.mockResolvedValue(entries);
+    useSessionStore.setState({ activeSessionId: firstSession.id, pending: entries });
+
+    useSessionStore.getState().editPending('in-1', 'changed');
+
+    expect(useSessionStore.getState().pending).toEqual([{ ...entries[0], content: 'changed' }]);
+    await vi.waitFor(() => expect(mockedInboxApi.list).toHaveBeenCalledWith(firstSession.id));
+    await vi.waitFor(() => expect(useSessionStore.getState().pending).toEqual(entries));
   });
 });

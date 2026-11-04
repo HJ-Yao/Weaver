@@ -45,8 +45,36 @@ describe('streamMessage', () => {
       onToolResult: (result) => results.push(result),
     });
 
-    expect(results).toEqual([
-      { callId: 'call-1', content: 'ok', isError: false, durationMs: 12 },
-    ]);
+    expect(results).toEqual([{ callId: 'call-1', content: 'ok', isError: false, durationMs: 12 }]);
+  });
+
+  it('decodes inbox snapshots as an entry array', async () => {
+    const expected = [
+      { id: 'in-1', target: 'STEP', content: '只改 main' },
+      { id: 'in-2', target: 'TURN', content: '更新 README' },
+    ];
+    const frames = `event:inbox\ndata:${JSON.stringify(expected)}\n\n`;
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(frames)));
+
+    const snapshots: unknown[] = [];
+
+    await streamMessage('session-1', 'hi', {
+      onInbox: (entries) => snapshots.push(entries),
+    });
+
+    expect(snapshots).toEqual([expected]);
+  });
+
+  it('decodes user messages without trimming their text', async () => {
+    const frames = 'event:user_message\ndata:{"text":"  保留前导空格"}\n\n';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(frames)));
+
+    const messages: string[] = [];
+
+    await streamMessage('session-1', 'hi', {
+      onUserMessage: (text) => messages.push(text),
+    });
+
+    expect(messages).toEqual(['  保留前导空格']);
   });
 });

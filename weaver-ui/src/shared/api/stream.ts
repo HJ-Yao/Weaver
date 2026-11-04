@@ -40,6 +40,13 @@ export interface StreamApproval {
   timeoutSeconds: number;
 }
 
+/** 运行中尚未消费的输入条目。 */
+export interface StreamInboxEntry {
+  id: string;
+  target: 'STEP' | 'TURN';
+  content: string;
+}
+
 /** 模型流结束的原因。 */
 export type StopReason = 'STOP' | 'LENGTH' | 'ERROR';
 
@@ -52,6 +59,10 @@ export interface StreamHandlers {
   onTool?: (call: StreamToolCall) => void;
   onToolResult?: (result: StreamToolResult) => void;
   onApproval?: (approval: StreamApproval) => void;
+  /** 服务端信箱快照，投递、撤回、修改后都会推送。 */
+  onInbox?: (entries: StreamInboxEntry[]) => void;
+  /** 一条用户消息进入事件流；包含每轮首条与运行中注入的插话。 */
+  onUserMessage?: (text: string) => void;
   onAborted?: (reason: AbortReason) => void;
   onDone?: (reason: StopReason) => void;
   onError?: (message: string) => void;
@@ -126,6 +137,12 @@ function dispatchFrame(frame: string, handlers: StreamHandlers): void {
       break;
     case 'approval':
       handlers.onApproval?.(JSON.parse(parsed.data) as StreamApproval);
+      break;
+    case 'inbox':
+      handlers.onInbox?.(JSON.parse(parsed.data) as StreamInboxEntry[]);
+      break;
+    case 'user_message':
+      handlers.onUserMessage?.((JSON.parse(parsed.data) as { text: string }).text);
       break;
     case 'aborted':
       handlers.onAborted?.((JSON.parse(parsed.data) as { reason: AbortReason }).reason);
