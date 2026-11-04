@@ -17,10 +17,11 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 直线驱动单步策略链的运行循环。
  *
- * <p>一次运行会处理初始输入及运行期间通过 {@link #enqueue(String)} 排队的输入，
+ * <p>一次运行会处理初始输入及运行期间通过 {@link #enqueue(String, Inbox.Target)}
+ * 投递的输入：STEP 在当前轮下一步开始前注入，TURN 在当前轮结束后作为下一轮处理。
  * {@code maxSteps} 按轮独立计数。线程契约：一个实例只调用一次
  * {@link #run(String, String)}；多次运行或并发会话请各自创建实例。
- * {@link #cancel()} 与 {@link #enqueue(String)} 可以从其他线程调用。
+ * {@link #cancel()} 与两个 {@code enqueue} 重载可以从其他线程调用。
  */
 @Slf4j
 public final class RunLoop {
@@ -28,12 +29,15 @@ public final class RunLoop {
     /** 单轮默认最大步数；达到上限按中止处理。 */
     public static final int DEFAULT_MAX_STEPS = RunLoopConfig.DEFAULT_MAX_STEPS;
 
+    /** 默认信箱容量。 */
+    public static final int DEFAULT_INBOX_CAPACITY = Inbox.DEFAULT_CAPACITY;
+
     private final ModelClient model; // 模型调用边界
     private final SessionEventStore store; // 会话事实源
     private final RunLoopConfig config; // 本次运行的步数、流式出口与协作者
     /** 当前运行实例的取消信号；实例只服务一次 run。 */
     private final RunCancellation cancellation = new RunCancellation();
-    /** 运行期间等待后续轮次处理的用户输入。 */
+    /** 运行期间等待下一步或后续轮次处理的用户输入。 */
     private final Inbox inbox = new Inbox();
     /** 当前是否处于一次 run 的生命周期内，供跨线程 enqueue 判定。 */
     private volatile boolean running;
@@ -68,8 +72,9 @@ public final class RunLoop {
      *
      * <p>输入是首轮用户文本 {@code input}、会话标识 {@code sessionId}，以及构造时装配的
      * 模型、事件存储、工具注册表和审批依赖。每轮先持久化该轮用户消息，再从 step 0 开始
-     * 逐步执行策略链；每一步使用新的 {@link RunContext}，跨步事实只从事件存储回放。
-     * 一轮自然结束后，若运行期间有排队输入则进入下一轮并重置步数预算。
+     * 逐步执行策略链。每个 step 开始前会写入全部尚未生效的 STEP 输入；每步使用新的
+     * {@link RunContext}，跨步事实只从事件存储回放。一轮自然结束后，未消费的 STEP 输入
+     * 降级为 TURN，若信箱仍有排队输入则进入下一轮并重置步数预算。
      *
      * <p>产出是完整会话事件流：节点追加的 assistant/tool/approval 事件，以及最终一条
      * {@link SessionEvent.RunFinished}。运行结束后 {@link #finalPhase()} 暴露完成态或
@@ -99,7 +104,7 @@ public final class RunLoop {
 
         running = true;
         try {
-            // 每轮开始记录用户事实；轮间只从信箱取一条，保持输入到达顺序。
+            // 每轮开始记录用户事实；轮间只从 TURN 道取一条，保持排队输入到达顺序。
             while (current != null && !cancellation.isCancelled()) {
                 sink.emit(new SessionEvent.MessageAdded(SessionEvent.Role.USER, current));
                 TurnOutcome turn = runTurn(sessionId, current, phase, root, sink);
@@ -108,7 +113,10 @@ public final class RunLoop {
                     aborted = true;
                     break;
                 }
-                current = inbox.poll();
+                // 本轮结束前没来得及注入的插话降级为下一轮，不能静默丢弃。
+                inbox.promoteStepToTurn();
+                Inbox.Entry nextTurn = inbox.pollTurn();
+                current = nextTurn == null ? null : nextTurn.content();
                 if (current != null) {
                     phase = phase.nextTurn();
                 }
@@ -126,22 +134,35 @@ public final class RunLoop {
     }
 
     /**
-     * 运行期间投递一条用户输入；未运行或输入空白时返回 false。
-     * 输入在当前轮结束后才会被处理。
+     * 运行期间投递一条排队输入，等价于 {@link Inbox.Target#TURN}。
      *
-     * <p>边界：恰好在最后一轮结束、run 返回之前入队的输入会返回 true 但不会被处理。
+     * @param input 待处理用户输入
+     * @return 输入是否成功进入当前运行的信箱
+     */
+    public boolean enqueue(String input) {
+        return enqueue(input, Inbox.Target.TURN);
+    }
+
+    /**
+     * 运行期间投递一条用户输入；未运行、空白、队列已满或已取消时返回 false。
+     *
+     * <p>STEP 在当前轮下一个 step 开始前注入；如果本轮没有下一个 step，轮末会降级为
+     * TURN。TURN 在当前轮结束后作为下一轮首条用户消息处理。
+     *
+     * <p>边界：恰好在最后一轮结束、run 返回之前成功入队的输入会返回 true 但不会被处理。
      * 由传输层（M2.2）用「运行中才入队、否则新建运行」的语义兜底。
      *
      * @param input 待处理用户输入
+     * @param target 输入生效目标
      * @return 输入是否成功进入当前运行的待处理队列
      */
-    public boolean enqueue(String input) {
+    public boolean enqueue(String input, Inbox.Target target) {
         Objects.requireNonNull(input, "input");
-        if (!running || input.isBlank()) {
+        Objects.requireNonNull(target, "target");
+        if (!running || cancellation.isCancelled() || input.isBlank()) {
             return false;
         }
-        inbox.offer(input);
-        return true;
+        return inbox.offer(input, target) != null;
     }
 
     /** 请求取消当前运行；立即触发已注册回调，并保证循环在下一步判定中止。 */
@@ -180,6 +201,11 @@ public final class RunLoop {
             EventSink sink) throws Exception {
         // 步数只在本轮内递增；首步和工具回灌后的步骤共享同一轮预算。
         while (phase.step() < config.maxSteps() && !cancellation.isCancelled()) {
+            // 轮内插话在每一步开始前注入；注入的是普通用户事实，回放天然可见。
+            for (Inbox.Entry entry : inbox.drainStep()) {
+                sink.emit(new SessionEvent.MessageAdded(
+                        SessionEvent.Role.USER, entry.content()));
+            }
             RunContext context =
                     new RunContext(sessionId, sink, config.streamSink(), cancellation);
             StepResult result = root.apply(

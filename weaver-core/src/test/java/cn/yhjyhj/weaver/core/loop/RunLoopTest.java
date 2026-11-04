@@ -15,6 +15,7 @@ import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.StoredEvent;
 import cn.yhjyhj.weaver.core.events.ToolResult;
+import cn.yhjyhj.weaver.core.loop.context.Inbox;
 import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.model.ModelMessage;
 import cn.yhjyhj.weaver.core.model.ModelRequest;
@@ -131,6 +132,7 @@ class RunLoopTest {
         await(modelStarted);
         assertTrue(runLoop.enqueue("queued"));
         runLoop.cancel();
+        assertFalse(runLoop.enqueue("after cancel", Inbox.Target.STEP));
         releaseModel.countDown();
         join(runner);
 
@@ -252,6 +254,208 @@ class RunLoopTest {
                 new SessionEvent.MessageAdded(SessionEvent.Role.USER, "second"),
                 new SessionEvent.MessageAdded(SessionEvent.Role.ASSISTANT, "reply second"),
                 new SessionEvent.RunFinished(false)), events(store));
+    }
+
+    @Test
+    void injectsStepInputBeforeTheNextStepWithoutInterruptingToolExecution()
+            throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        CountDownLatch toolStarted = new CountDownLatch(1);
+        CountDownLatch releaseTool = new CountDownLatch(1);
+        AtomicBoolean accepted = new AtomicBoolean();
+        AtomicReference<Throwable> enqueueFailure = new AtomicReference<>();
+        AtomicReference<ModelRequest> secondRequest = new AtomicReference<>();
+        AtomicInteger requestCount = new AtomicInteger();
+        ModelClient model = request -> {
+            if (requestCount.incrementAndGet() == 2) {
+                secondRequest.set(request);
+            }
+            return publisherOf(
+                    requestCount.get() == 1
+                            ? new StreamChunk.ToolCall("call-1", "file", "{}")
+                            : new StreamChunk.Text("done"),
+                    new StreamChunk.Done(StreamChunk.StopReason.STOP));
+        };
+        RunLoop runLoop = new RunLoop(
+                model,
+                store,
+                config(
+                        blockingFileRegistry(toolStarted, releaseTool),
+                        ALLOW_ALL,
+                        ApprovalGate.denyAll(),
+                        ApprovalGrantStore.none()));
+        Thread enqueuer = new Thread(() -> {
+            try {
+                await(toolStarted);
+                accepted.set(runLoop.enqueue("纠正方向", Inbox.Target.STEP));
+            } catch (Throwable throwable) {
+                enqueueFailure.set(throwable);
+            } finally {
+                releaseTool.countDown();
+            }
+        });
+
+        enqueuer.start();
+        runLoop.run(SESSION_ID, "first");
+        join(enqueuer);
+
+        assertNull(enqueueFailure.get());
+        assertTrue(accepted.get());
+        assertEquals(2, requestCount.get());
+        List<SessionEvent> trace = eventTrace(store);
+        assertEquals(6, trace.size());
+        assertEquals(
+                new SessionEvent.MessageAdded(SessionEvent.Role.USER, "first"),
+                trace.get(0));
+        assertTrue(trace.get(1) instanceof SessionEvent.ToolCallStarted);
+        assertTrue(trace.get(2) instanceof SessionEvent.ToolCallCompleted);
+        assertEquals(
+                new SessionEvent.MessageAdded(
+                        SessionEvent.Role.USER, "纠正方向"),
+                trace.get(3));
+        assertEquals(
+                new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "done"),
+                trace.get(4));
+        assertEquals(new SessionEvent.RunFinished(false), trace.get(5));
+        assertEquals(
+                new ModelMessage.User("纠正方向"),
+                secondRequest.get().history().getLast());
+    }
+
+    @Test
+    void stepInputDoesNotResetTheCurrentTurnStepBudget() {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        AtomicReference<RunLoop> loopReference = new AtomicReference<>();
+        AtomicBoolean enqueued = new AtomicBoolean();
+        AtomicInteger modelCalls = new AtomicInteger();
+        ModelClient model = request -> {
+            modelCalls.incrementAndGet();
+            if (enqueued.compareAndSet(false, true)) {
+                assertTrue(loopReference.get().enqueue(
+                        "纠正方向", Inbox.Target.STEP));
+            }
+            return publisherOf(
+                    new StreamChunk.ToolCall("call-" + modelCalls.get(), "missing", "{}"),
+                    new StreamChunk.Done(StreamChunk.StopReason.STOP));
+        };
+        RunLoop runLoop = new RunLoop(
+                model, store, config(2, ToolRegistry.empty()));
+        loopReference.set(runLoop);
+
+        runLoop.run(SESSION_ID, "first");
+
+        assertEquals(2, modelCalls.get());
+        assertEquals(
+                List.of("first", "纠正方向"),
+                userMessages(store).stream()
+                        .map(SessionEvent.MessageAdded::content)
+                        .toList());
+        assertEquals(new SessionEvent.RunFinished(true), events(store).getLast());
+    }
+
+    @Test
+    void promotesUnconsumedStepInputToTheNextTurn() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        CountDownLatch modelStarted = new CountDownLatch(1);
+        CountDownLatch releaseModel = new CountDownLatch(1);
+        AtomicBoolean accepted = new AtomicBoolean();
+        AtomicReference<Throwable> enqueueFailure = new AtomicReference<>();
+        AtomicInteger requestCount = new AtomicInteger();
+        ModelClient model = request -> {
+            if (requestCount.incrementAndGet() == 1) {
+                modelStarted.countDown();
+                await(releaseModel);
+            }
+            return publisherOf(
+                    new StreamChunk.Text("reply " + request.input()),
+                    new StreamChunk.Done(StreamChunk.StopReason.STOP));
+        };
+        RunLoop runLoop = new RunLoop(model, store);
+        Thread enqueuer = new Thread(() -> {
+            try {
+                await(modelStarted);
+                accepted.set(runLoop.enqueue("late steer", Inbox.Target.STEP));
+            } catch (Throwable throwable) {
+                enqueueFailure.set(throwable);
+            } finally {
+                releaseModel.countDown();
+            }
+        });
+
+        enqueuer.start();
+        runLoop.run(SESSION_ID, "first");
+        join(enqueuer);
+
+        assertNull(enqueueFailure.get());
+        assertTrue(accepted.get());
+        assertEquals(2, requestCount.get());
+        assertEquals(
+                List.of("first", "late steer"),
+                userMessages(store).stream()
+                        .map(SessionEvent.MessageAdded::content)
+                        .toList());
+        assertEquals(List.of(
+                new SessionEvent.MessageAdded(SessionEvent.Role.USER, "first"),
+                new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "reply first"),
+                new SessionEvent.MessageAdded(
+                        SessionEvent.Role.USER, "late steer"),
+                new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "reply late steer"),
+                new SessionEvent.RunFinished(false)), events(store));
+    }
+
+    @Test
+    void rejectsEnqueueWhenInboxIsFull() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        CountDownLatch modelStarted = new CountDownLatch(1);
+        CountDownLatch releaseModel = new CountDownLatch(1);
+        AtomicInteger acceptedCount = new AtomicInteger();
+        AtomicBoolean overflowRejected = new AtomicBoolean();
+        AtomicReference<Throwable> enqueueFailure = new AtomicReference<>();
+        AtomicInteger requestCount = new AtomicInteger();
+        ModelClient model = request -> {
+            if (requestCount.incrementAndGet() == 1) {
+                modelStarted.countDown();
+                await(releaseModel);
+            }
+            return publisherOf(
+                    requestCount.get() == 1
+                            ? new StreamChunk.ToolCall("call-1", "missing", "{}")
+                            : new StreamChunk.Text("done"),
+                    new StreamChunk.Done(StreamChunk.StopReason.STOP));
+        };
+        RunLoop runLoop = new RunLoop(model, store);
+        Thread enqueuer = new Thread(() -> {
+            try {
+                await(modelStarted);
+                for (int index = 0; index < Inbox.DEFAULT_CAPACITY; index++) {
+                    if (runLoop.enqueue("step " + index, Inbox.Target.STEP)) {
+                        acceptedCount.incrementAndGet();
+                    }
+                }
+                overflowRejected.set(
+                        !runLoop.enqueue("overflow", Inbox.Target.STEP));
+            } catch (Throwable throwable) {
+                enqueueFailure.set(throwable);
+            } finally {
+                releaseModel.countDown();
+            }
+        });
+
+        enqueuer.start();
+        runLoop.run(SESSION_ID, "first");
+        join(enqueuer);
+
+        assertNull(enqueueFailure.get());
+        assertEquals(Inbox.DEFAULT_CAPACITY, acceptedCount.get());
+        assertTrue(overflowRejected.get());
+        assertEquals(2, requestCount.get());
+        assertEquals(
+                Inbox.DEFAULT_CAPACITY + 1,
+                userMessages(store).size());
+        assertEquals(new SessionEvent.RunFinished(false), events(store).getLast());
     }
 
     @Test
@@ -596,6 +800,15 @@ class RunLoopTest {
         return store.from(SESSION_ID, 0).stream().map(StoredEvent::event).toList();
     }
 
+    private static List<SessionEvent> eventTrace(InMemorySessionEventStore store) {
+        return events(store).stream()
+                .filter(event -> event instanceof SessionEvent.MessageAdded
+                        || event instanceof SessionEvent.ToolCallStarted
+                        || event instanceof SessionEvent.ToolCallCompleted
+                        || event instanceof SessionEvent.RunFinished)
+                .toList();
+    }
+
     private static List<SessionEvent.MessageAdded> assistantMessages(
             InMemorySessionEventStore store) {
         return events(store).stream()
@@ -644,6 +857,24 @@ class RunLoopTest {
 
             @Override
             public ToolResult execute(String argumentsJson) {
+                return new ToolResult("ok", false, 0L);
+            }
+        }));
+    }
+
+    private static ToolRegistry blockingFileRegistry(
+            CountDownLatch started,
+            CountDownLatch release) {
+        return new ToolRegistry(List.of(new Tool() {
+            @Override
+            public String name() {
+                return "file";
+            }
+
+            @Override
+            public ToolResult execute(String argumentsJson) {
+                started.countDown();
+                await(release);
                 return new ToolResult("ok", false, 0L);
             }
         }));
