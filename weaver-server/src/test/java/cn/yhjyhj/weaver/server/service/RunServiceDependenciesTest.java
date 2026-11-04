@@ -12,6 +12,7 @@ import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
+import cn.yhjyhj.weaver.server.store.InMemorySessionStore;
 import java.time.Duration;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
@@ -22,7 +23,7 @@ class RunServiceDependenciesTest {
     @Test
     void rejectsNonPositiveMaxSteps() {
         InMemorySessionEventStore eventStore = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(eventStore);
+        SessionService sessions = new SessionService(new InMemorySessionStore(), eventStore);
 
         assertAll(
                 () -> assertThrows(
@@ -36,7 +37,7 @@ class RunServiceDependenciesTest {
     @Test
     void rejectsNegativeApprovalTimeout() {
         InMemorySessionEventStore eventStore = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(eventStore);
+        SessionService sessions = new SessionService(new InMemorySessionStore(), eventStore);
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -46,7 +47,7 @@ class RunServiceDependenciesTest {
     @Test
     void rejectsNullCollaborators() {
         InMemorySessionEventStore eventStore = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(eventStore);
+        SessionService sessions = new SessionService(new InMemorySessionStore(), eventStore);
         ModelClient model = request -> {
             throw new UnsupportedOperationException();
         };

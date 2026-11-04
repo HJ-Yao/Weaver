@@ -166,4 +166,32 @@ class SqliteEventStoreTest {
         assertThrows(IllegalStateException.class, () -> store.from("session-1", 0L));
         assertThrows(IllegalStateException.class, () -> store.lastSeq("session-1"));
     }
+
+    @Test
+    void deleteAllRemovesEventsAndSequenceState() {
+        try (SqliteEventStore store =
+                new SqliteEventStore(tempDirectory.resolve("delete-all.db"))) {
+            store.append("session-1", new SessionEvent.RunFinished(false));
+            store.append("session-1", new SessionEvent.RunFinished(true));
+
+            store.deleteAll("session-1");
+
+            assertEquals(List.of(), store.from("session-1", 0L));
+            assertEquals(0L, store.lastSeq("session-1"));
+        }
+    }
+
+    @Test
+    void sessionIdsReturnsOnlySessionsWithEvents() {
+        try (SqliteEventStore store =
+                new SqliteEventStore(tempDirectory.resolve("session-ids.db"))) {
+            assertEquals(List.of(), store.sessionIds());
+
+            store.append("session-b", new SessionEvent.RunFinished(false));
+            store.append("session-a", new SessionEvent.RunFinished(false));
+            store.append("session-a", new SessionEvent.RunFinished(true));
+
+            assertEquals(List.of("session-a", "session-b"), store.sessionIds());
+        }
+    }
 }

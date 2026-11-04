@@ -140,7 +140,9 @@ class SessionControllerTest {
 
     @Test
     void deletesSessionWithNoContentResponse() throws Exception {
+        when(sessionService.find("session-1")).thenReturn(Optional.of(SUMMARY));
         when(sessionService.delete("session-1")).thenReturn(true);
+        when(runService.isRunning("session-1")).thenReturn(false);
 
         mockMvc.perform(delete("/api/sessions/session-1"))
                 .andExpect(status().isNoContent());
@@ -148,9 +150,64 @@ class SessionControllerTest {
 
     @Test
     void returnsNotFoundWhenDeletingUnknownSession() throws Exception {
-        when(sessionService.delete("missing")).thenReturn(false);
+        when(sessionService.find("missing")).thenReturn(Optional.empty());
 
         mockMvc.perform(delete("/api/sessions/missing"))
+                .andExpect(status().isNotFound());
+
+        verify(sessionService, never()).delete("missing");
+    }
+
+    @Test
+    void returnsNotFoundWhenSessionDisappearsBeforeMetadataDelete() throws Exception {
+        when(sessionService.find("session-1")).thenReturn(Optional.of(SUMMARY));
+        when(runService.isRunning("session-1")).thenReturn(false);
+        when(sessionService.delete("session-1")).thenReturn(false);
+
+        mockMvc.perform(delete("/api/sessions/session-1"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void rejectsDeletingSessionWithActiveRun() throws Exception {
+        when(sessionService.find("session-1")).thenReturn(Optional.of(SUMMARY));
+        when(runService.isRunning("session-1")).thenReturn(true);
+
+        mockMvc.perform(delete("/api/sessions/session-1"))
+                .andExpect(status().isConflict());
+
+        verify(sessionService, never()).delete("session-1");
+    }
+
+    @Test
+    void renamesSessionAndReturnsUpdatedSummary() throws Exception {
+        SessionSummary renamed = new SessionSummary("session-1", "Renamed", CREATED_AT);
+        when(sessionService.rename("session-1", "Renamed")).thenReturn(true);
+        when(sessionService.find("session-1")).thenReturn(Optional.of(renamed));
+
+        mockMvc.perform(patch("/api/sessions/session-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Renamed\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("session-1"))
+                .andExpect(jsonPath("$.title").value("Renamed"));
+    }
+
+    @Test
+    void rejectsBlankRenameTitle() throws Exception {
+        mockMvc.perform(patch("/api/sessions/session-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\" \"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void returnsNotFoundWhenRenamingUnknownSession() throws Exception {
+        when(sessionService.rename("missing", "Renamed")).thenReturn(false);
+
+        mockMvc.perform(patch("/api/sessions/missing")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Renamed\"}"))
                 .andExpect(status().isNotFound());
     }
 

@@ -5,6 +5,7 @@ import cn.yhjyhj.weaver.server.api.dto.CreateSessionRequest;
 import cn.yhjyhj.weaver.server.api.dto.InboxContentRequest;
 import cn.yhjyhj.weaver.server.api.dto.InboxEntryView;
 import cn.yhjyhj.weaver.server.api.dto.InboxRequest;
+import cn.yhjyhj.weaver.server.api.dto.RenameSessionRequest;
 import cn.yhjyhj.weaver.server.api.dto.SendMessageRequest;
 import cn.yhjyhj.weaver.server.api.dto.SessionDetail;
 import cn.yhjyhj.weaver.server.api.dto.SessionEventView;
@@ -96,14 +97,37 @@ public class SessionController {
     }
 
     /**
-     * 删除会话。
+     * 修改会话标题。
+     *
+     * @param id 会话标识
+     * @param request 非空且不超过 60 个字符的新标题
+     * @return 更新后的会话元数据
+     * @throws ResponseStatusException 会话不存在时返回 404
+     */
+    @PatchMapping("/{id}")
+    public SessionSummary rename(
+            @PathVariable("id") String id,
+            @Valid @RequestBody RenameSessionRequest request) {
+        if (!sessions.rename(id, request.title())) {
+            throw notFound(id);
+        }
+        return requireSession(id);
+    }
+
+    /**
+     * 删除会话及其全部事件。
      *
      * @param id 会话标识
      * @return 204 无响应体
-     * @throws ResponseStatusException 会话不存在时返回 404
+     * @throws ResponseStatusException 会话不存在时返回 404；有活动运行时返回 409
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable("id") String id) {
+        requireSession(id);
+        if (runService.isRunning(id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "run already active: " + id);
+        }
         if (!sessions.delete(id)) {
             throw notFound(id);
         }

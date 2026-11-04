@@ -252,6 +252,16 @@ public final class RunService {
         return true;
     }
 
+    /**
+     * 判断指定会话是否有活动运行。
+     *
+     * @param sessionId 会话标识
+     * @return 当前存在活动运行时为 true
+     */
+    public boolean isRunning(String sessionId) {
+        return activeRuns.containsKey(sessionId);
+    }
+
     private void execute(
             String sessionId,
             String content,
@@ -276,6 +286,7 @@ public final class RunService {
             loop.cancel();
         }
         loop.run(sessionId, content);
+        sessions.touch(sessionId);
 
         if (loop.finalPhase().aborted()) {
             boolean cancelled = activeRun.cancelRequested().get();

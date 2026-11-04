@@ -65,6 +65,22 @@ public final class SqliteEventStore implements SessionEventStore, AutoCloseable 
     private static final String SELECT_LAST_SEQ =
             "SELECT last_seq FROM session_sequences WHERE session_id = ?";
 
+    /** 查询有事件的会话标识。 */
+    private static final String SELECT_SESSION_IDS = """
+            SELECT session_id
+            FROM session_events
+            GROUP BY session_id
+            ORDER BY session_id
+            """;
+
+    /** 删除会话事件。 */
+    private static final String DELETE_EVENTS =
+            "DELETE FROM session_events WHERE session_id = ?";
+
+    /** 删除会话序号状态。 */
+    private static final String DELETE_SEQUENCE =
+            "DELETE FROM session_sequences WHERE session_id = ?";
+
     /** 本实例独占的 SQLite 连接。 */
     private final Connection connection;
     /** 事件 JSON 编解码器。 */
@@ -192,6 +208,54 @@ public final class SqliteEventStore implements SessionEventStore, AutoCloseable 
             }
         } catch (SQLException exception) {
             throw new IllegalStateException("failed to read last session sequence", exception);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public synchronized List<String> sessionIds() {
+        ensureOpen();
+
+        try (PreparedStatement statement = connection.prepareStatement(SELECT_SESSION_IDS);
+                ResultSet result = statement.executeQuery()) {
+            List<String> sessionIds = new ArrayList<>();
+            while (result.next()) {
+                sessionIds.add(result.getString("session_id"));
+            }
+            return List.copyOf(sessionIds);
+        } catch (SQLException exception) {
+            throw new IllegalStateException("failed to list session ids", exception);
+        }
+    }
+
+    /**
+     * 在同一事务中删除指定会话的全部事件与序号状态。
+     *
+     * @param sessionId 会话标识
+     * @throws IllegalStateException 存储已关闭或删除失败时抛出
+     */
+    @Override
+    public synchronized void deleteAll(String sessionId) {
+        ensureOpen();
+        requireSessionId(sessionId);
+
+        try {
+            connection.setAutoCommit(false);
+            try (PreparedStatement events =
+                            connection.prepareStatement(DELETE_EVENTS);
+                    PreparedStatement sequence =
+                            connection.prepareStatement(DELETE_SEQUENCE)) {
+                events.setString(1, sessionId);
+                events.executeUpdate();
+                sequence.setString(1, sessionId);
+                sequence.executeUpdate();
+            }
+            connection.commit();
+        } catch (SQLException exception) {
+            rollback();
+            throw new IllegalStateException("failed to delete session events", exception);
+        } finally {
+            restoreAutoCommit();
         }
     }
 

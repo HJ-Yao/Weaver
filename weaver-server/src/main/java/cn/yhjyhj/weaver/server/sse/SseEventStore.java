@@ -57,6 +57,18 @@ public final class SseEventStore implements SessionEventStore {
         return delegate.lastSeq(sessionId);
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public List<String> sessionIds() {
+        return delegate.sessionIds();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void deleteAll(String sessionId) {
+        delegate.deleteAll(sessionId);
+    }
+
     private void sendToolResult(SessionEvent.ToolCallCompleted completed) {
         ToolResult result = completed.result();
         ToolResultEvent payload = new ToolResultEvent(

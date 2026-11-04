@@ -16,7 +16,9 @@ import cn.yhjyhj.weaver.server.settings.DefaultModelClientProvider;
 import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import cn.yhjyhj.weaver.server.settings.ModelSettingsService;
 import cn.yhjyhj.weaver.server.settings.ModelSettingsStore;
+import cn.yhjyhj.weaver.server.store.SessionStore;
 import cn.yhjyhj.weaver.server.store.SqliteEventStore;
+import cn.yhjyhj.weaver.server.store.SqliteSessionStore;
 import cn.yhjyhj.weaver.server.workspace.WorkspaceDiffService;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -37,6 +39,31 @@ public class WeaverConfig {
     @Bean(destroyMethod = "close")
     public SessionEventStore eventStore(WeaverProperties properties) {
         return new SqliteEventStore(properties.storePath());
+    }
+
+    /**
+     * 创建与事件事实源共用数据库文件的 SQLite 会话元数据存储。
+     *
+     * @param properties Weaver 运行配置
+     * @return 可持久化会话标题与更新时间的存储
+     */
+    @Bean(destroyMethod = "close")
+    public SessionStore sessionStore(WeaverProperties properties) {
+        return new SqliteSessionStore(properties.storePath());
+    }
+
+    /**
+     * 创建会话服务，并在启动装配阶段补齐历史事件对应的元数据。
+     *
+     * @param store 会话元数据存储
+     * @param events 会话事件事实源
+     * @return 已完成 backfill 的单例会话服务
+     */
+    @Bean
+    public SessionService sessionService(SessionStore store, SessionEventStore events) {
+        SessionService service = new SessionService(store, events);
+        service.backfill();
+        return service;
     }
 
     /**

@@ -5,30 +5,34 @@ import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionSnapshot;
 import cn.yhjyhj.weaver.core.events.StoredEvent;
 import cn.yhjyhj.weaver.server.api.dto.SessionSummary;
+import cn.yhjyhj.weaver.server.store.SessionStore;
 import java.time.Instant;
-import java.util.Comparator;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import org.springframework.stereotype.Service;
+import lombok.extern.slf4j.Slf4j;
 
-/** 管理会话元数据，并从事件事实源生成会话快照。 */
-@Service
+/** 管理持久化会话元数据，并从事件事实源生成会话快照。 */
+@Slf4j
 public class SessionService {
 
-    private final Map<String, SessionSummary> sessions = new ConcurrentHashMap<>(); // 会话元数据索引
-    private final SessionEventStore store; // 会话事件事实源
+    /** 未命名会话对外的展示标题。 */
+    private static final String DEFAULT_TITLE = "新会话";
+
+    private final SessionStore sessions; // 持久化会话元数据
+    private final SessionEventStore events; // 会话事件事实源
 
     /**
      * 创建会话服务。
      *
-     * @param store 会话事件事实源
+     * @param sessions 会话元数据存储
+     * @param events 会话事件事实源
      */
-    public SessionService(SessionEventStore store) {
-        this.store = Objects.requireNonNull(store, "store");
+    public SessionService(SessionStore sessions, SessionEventStore events) {
+        this.sessions = Objects.requireNonNull(sessions, "sessions");
+        this.events = Objects.requireNonNull(events, "events");
     }
 
     /**
@@ -42,20 +46,21 @@ public class SessionService {
         if (title == null || title.isBlank()) {
             throw new IllegalArgumentException("title must not be blank");
         }
-        SessionSummary summary = new SessionSummary(UUID.randomUUID().toString(), title, Instant.now());
-        sessions.put(summary.id(), summary);
+        Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        SessionSummary summary =
+                new SessionSummary(UUID.randomUUID().toString(), title, createdAt);
+        sessions.create(summary.id(), title, createdAt);
         return summary;
     }
 
     /**
-     * 返回按创建时间升序排列的会话元数据快照。
+     * 返回按最近更新时间倒序排列的会话元数据快照。
      *
      * @return 不可修改的会话列表
      */
     public List<SessionSummary> list() {
-        return sessions.values().stream()
-                .sorted(Comparator.comparing(SessionSummary::createdAt)
-                        .thenComparing(SessionSummary::id))
+        return sessions.list().stream()
+                .map(SessionService::displaySummary)
                 .toList();
     }
 
@@ -66,17 +71,57 @@ public class SessionService {
      * @return 存在时返回会话元数据，否则为空
      */
     public Optional<SessionSummary> find(String id) {
-        return Optional.ofNullable(sessions.get(id));
+        return sessions.find(id).map(SessionService::displaySummary);
     }
 
     /**
-     * 删除会话元数据；事件日志由事实源独立管理。
+     * 手动修改会话标题。
+     *
+     * @param id 会话标识
+     * @param title 非空白的展示标题
+     * @return 会话存在并修改成功时为 true
+     * @throws IllegalArgumentException 标题为空或仅含空白时抛出
+     */
+    public boolean rename(String id, String title) {
+        if (title == null || title.isBlank()) {
+            throw new IllegalArgumentException("title must not be blank");
+        }
+        return sessions.rename(id, title);
+    }
+
+    /**
+     * 删除会话事件和元数据。
+     *
+     * <p>先删除事件事实，再删除元数据，避免调用方观察到已删除会话仍留有事件。
      *
      * @param id 会话标识
      * @return 是否删除了已有会话
      */
     public boolean delete(String id) {
-        return sessions.remove(id) != null;
+        events.deleteAll(id);
+        return sessions.delete(id);
+    }
+
+    /**
+     * 刷新会话最近更新时间。
+     *
+     * @param id 会话标识；不存在时由存储实现忽略
+     */
+    public void touch(String id) {
+        sessions.touch(id);
+    }
+
+    /**
+     * 为已有事件但缺少元数据的会话补元数据。
+     *
+     * @return 新增的会话元数据条数
+     */
+    public int backfill() {
+        int backfilled = sessions.backfill(Instant.now());
+        if (backfilled > 0) {
+            log.info("backfilled {} session metadata rows from event history", backfilled);
+        }
+        return backfilled;
     }
 
     /**
@@ -86,7 +131,7 @@ public class SessionService {
      * @return 当前事件流对应的快照
      */
     public SessionSnapshot snapshot(String id) {
-        return SessionEvents.replay(store.from(id, 0L));
+        return SessionEvents.replay(events.from(id, 0L));
     }
 
     /**
@@ -96,6 +141,13 @@ public class SessionService {
      * @return 按 seq 升序排列的事件；会话不存在或没有事件时为空列表
      */
     public List<StoredEvent> events(String id) {
-        return store.from(id, 0L);
+        return events.from(id, 0L);
+    }
+
+    private static SessionSummary displaySummary(SessionSummary summary) {
+        if (summary.title() != null) {
+            return summary;
+        }
+        return new SessionSummary(summary.id(), DEFAULT_TITLE, summary.createdAt());
     }
 }

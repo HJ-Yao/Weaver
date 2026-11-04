@@ -48,4 +48,21 @@ public final class InMemorySessionEventStore implements SessionEventStore {
     public long lastSeq(String sessionId) {
         return sequences.getOrDefault(sessionId, 0L);
     }
+
+    /** {@inheritDoc} */
+    @Override
+    public List<String> sessionIds() {
+        return events.entrySet().stream()
+                .filter(entry -> !entry.getValue().isEmpty())
+                .map(Map.Entry::getKey)
+                .sorted()
+                .toList();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void deleteAll(String sessionId) {
+        events.remove(sessionId);
+        sequences.remove(sessionId);
+    }
 }

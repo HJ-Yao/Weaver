@@ -16,7 +16,9 @@ import cn.yhjyhj.weaver.server.service.RunService;
 import cn.yhjyhj.weaver.server.service.SessionService;
 import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import cn.yhjyhj.weaver.server.settings.ModelSettingsService;
+import cn.yhjyhj.weaver.server.store.SessionStore;
 import cn.yhjyhj.weaver.server.store.SqliteEventStore;
+import cn.yhjyhj.weaver.server.store.SqliteSessionStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -60,6 +62,7 @@ class WeaverApplicationTest {
         assertEquals(eventStore, properties.storePath());
 
         assertTrue(context.getBean(SessionEventStore.class) instanceof SqliteEventStore);
+        assertTrue(context.getBean(SessionStore.class) instanceof SqliteSessionStore);
         ToolRegistry tools = context.getBean(ToolRegistry.class);
         assertEquals(
                 java.util.List.of("file", "git", "shell"),
