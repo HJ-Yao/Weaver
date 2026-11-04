@@ -166,31 +166,31 @@ public final class Inbox {
      *
      * @param id 条目标识
      * @param content 新文本，空白内容视为非法
-     * @return 是否找到并替换
+     * @return 替换后的条目；id 不存在或文本空白时返回 null
      */
-    public boolean replace(String id, String content) {
+    public Entry replace(String id, String content) {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(content, "content");
         if (content.isBlank()) {
-            return false;
+            return null;
         }
         synchronized (lock) {
             ArrayDeque<Entry> updated = new ArrayDeque<>(entries.size());
-            boolean found = false;
+            Entry replaced = null;
             for (Entry entry : entries) {
                 if (entry.id().equals(id)) {
-                    updated.addLast(new Entry(entry.id(), entry.target(), content));
-                    found = true;
+                    replaced = new Entry(entry.id(), entry.target(), content);
+                    updated.addLast(replaced);
                 } else {
                     updated.addLast(entry);
                 }
             }
-            if (!found) {
-                return false;
+            if (replaced == null) {
+                return null;
             }
             entries.clear();
             entries.addAll(updated);
-            return true;
+            return replaced;
         }
     }
 

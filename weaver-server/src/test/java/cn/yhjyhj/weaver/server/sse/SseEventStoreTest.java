@@ -54,7 +54,7 @@ class SseEventStoreTest {
     }
 
     @Test
-    void doesNotSendOtherEventTypes() {
+    void forwardsUserMessageAsJsonWithoutTrimmingLeadingSpace() {
         List<SentEvent> events = new ArrayList<>();
         SseEventStore store = new SseEventStore(
                 new FakeSessionEventStore(3L, List.of(), 3L),
@@ -62,7 +62,25 @@ class SseEventStoreTest {
 
         store.append(
                 "session-1",
-                new SessionEvent.MessageAdded(SessionEvent.Role.USER, "hello"));
+                new SessionEvent.MessageAdded(SessionEvent.Role.USER, " 前导空格"));
+
+        assertEquals(1, events.size());
+        SentEvent event = events.getFirst();
+        assertEquals("user_message", event.name());
+        Map<String, Object> payload = JSON.convertValue(event.data(), new TypeReference<>() {});
+        assertEquals(" 前导空格", payload.get("text"));
+    }
+
+    @Test
+    void doesNotForwardAssistantMessages() {
+        List<SentEvent> events = new ArrayList<>();
+        SseEventStore store = new SseEventStore(
+                new FakeSessionEventStore(3L, List.of(), 3L),
+                (eventName, data) -> events.add(new SentEvent(eventName, data)));
+
+        store.append(
+                "session-1",
+                new SessionEvent.MessageAdded(SessionEvent.Role.ASSISTANT, "hello"));
 
         assertEquals(List.of(), events);
     }

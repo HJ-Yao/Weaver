@@ -15,6 +15,7 @@ import cn.yhjyhj.weaver.core.events.SessionSnapshot;
 import cn.yhjyhj.weaver.core.events.SessionEvents;
 import cn.yhjyhj.weaver.core.events.StoredEvent;
 import cn.yhjyhj.weaver.core.events.ToolResult;
+import cn.yhjyhj.weaver.core.loop.context.Inbox;
 import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.model.StreamChunk;
 import cn.yhjyhj.weaver.core.tool.Reversibility;
@@ -31,6 +32,7 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Flow;
+import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -197,6 +199,248 @@ class RunServiceTest {
                 300));
 
         assertFalse(service.cancel("missing-session"));
+    }
+
+    @Test
+    void enqueuesTurnInputAndProcessesItAsTheNextUserMessage() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(store);
+        SessionSummary summary = sessions.create("Inbox turn");
+        RecordingEmitter emitter = new RecordingEmitter();
+        CountDownLatch modelStarted = new CountDownLatch(1);
+        CountDownLatch releaseModel = new CountDownLatch(1);
+        RunService service = new RunService(dependencies(
+                sessions,
+                store,
+                ModelClientProvider.fixed(blockingFirstCall(
+                        new EchoModelClient(), modelStarted, releaseModel)),
+                ToolRegistry.empty(),
+                30,
+                () -> emitter));
+
+        service.run(summary.id(), "first");
+        assertTrue(modelStarted.await(2, TimeUnit.SECONDS));
+        Inbox.Entry queued;
+        try {
+            queued = service.enqueue(
+                    summary.id(), "only change main", Inbox.Target.TURN);
+        } finally {
+            releaseModel.countDown();
+        }
+
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(5)));
+        assertEquals(Inbox.Target.TURN, queued.target());
+        assertEquals("only change main", queued.content());
+        assertEquals(
+                List.of("first", "only change main"),
+                SessionEvents.replay(store.from(summary.id(), 0L)).messages().stream()
+                        .filter(message -> message.role() == SessionEvent.Role.USER)
+                        .map(SessionSnapshot.Message::content)
+                        .toList());
+    }
+
+    @Test
+    void enqueuesStepInputIntoTheEventStreamBeforeTheNextStep() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(store);
+        SessionSummary summary = sessions.create("Inbox step");
+        RecordingEmitter emitter = new RecordingEmitter();
+        CountDownLatch modelStarted = new CountDownLatch(1);
+        CountDownLatch releaseModel = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        ModelClient model = request -> {
+            int call = calls.incrementAndGet();
+            if (call == 1) {
+                modelStarted.countDown();
+                awaitLatch(releaseModel);
+                return publisherOf(
+                        new StreamChunk.ToolCall("call-1", "file", "{}"),
+                        new StreamChunk.Done(StreamChunk.StopReason.STOP));
+            }
+            return publisherOf(
+                    new StreamChunk.Text("steered"),
+                    new StreamChunk.Done(StreamChunk.StopReason.STOP));
+        };
+        RunService service = new RunService(dependencies(
+                sessions,
+                store,
+                ModelClientProvider.fixed(model),
+                new ToolRegistry(List.of(reversibleFileTool())),
+                30,
+                () -> emitter));
+
+        service.run(summary.id(), "first");
+        assertTrue(modelStarted.await(2, TimeUnit.SECONDS));
+        try {
+            assertEquals(
+                    Inbox.Target.STEP,
+                    service.enqueue(summary.id(), "only main", Inbox.Target.STEP).target());
+        } finally {
+            releaseModel.countDown();
+        }
+
+        assertTrue(awaitRunFinished(store, summary.id()));
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(1)));
+        List<SessionEvent> trace = store.from(summary.id(), 0L).stream()
+                .map(StoredEvent::event)
+                .filter(event -> event instanceof SessionEvent.MessageAdded
+                        || event instanceof SessionEvent.ToolCallStarted
+                        || event instanceof SessionEvent.ToolCallCompleted
+                        || event instanceof SessionEvent.RunFinished)
+                .toList();
+        assertEquals(
+                new SessionEvent.MessageAdded(SessionEvent.Role.USER, "first"),
+                trace.get(0));
+        assertTrue(trace.get(1) instanceof SessionEvent.ToolCallStarted);
+        assertTrue(trace.get(2) instanceof SessionEvent.ToolCallCompleted);
+        assertEquals(
+                new SessionEvent.MessageAdded(SessionEvent.Role.USER, "only main"),
+                trace.get(3));
+        assertEquals(
+                new SessionEvent.MessageAdded(SessionEvent.Role.ASSISTANT, "steered"),
+                trace.get(4));
+        assertEquals(new SessionEvent.RunFinished(false), trace.get(5));
+    }
+
+    @Test
+    void pendingReflectsRemovedAndReplacedEntries() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(store);
+        SessionSummary summary = sessions.create("Inbox edit");
+        RecordingEmitter emitter = new RecordingEmitter();
+        CountDownLatch modelStarted = new CountDownLatch(1);
+        CountDownLatch releaseModel = new CountDownLatch(1);
+        RunService service = new RunService(dependencies(
+                sessions,
+                store,
+                ModelClientProvider.fixed(blockingFirstCall(
+                        new EchoModelClient(), modelStarted, releaseModel)),
+                ToolRegistry.empty(),
+                30,
+                () -> emitter));
+
+        service.run(summary.id(), "first");
+        assertTrue(modelStarted.await(2, TimeUnit.SECONDS));
+        try {
+            Inbox.Entry first = service.enqueue(
+                    summary.id(), "remove me", Inbox.Target.STEP);
+            Inbox.Entry second = service.enqueue(
+                    summary.id(), "replace me", Inbox.Target.TURN);
+
+            assertTrue(service.removePending(summary.id(), first.id()));
+            assertEquals(
+                    new Inbox.Entry(second.id(), Inbox.Target.TURN, "updated"),
+                    service.replacePending(summary.id(), second.id(), "updated"));
+            assertEquals(
+                    List.of(new Inbox.Entry(
+                            second.id(), Inbox.Target.TURN, "updated")),
+                    service.pending(summary.id()));
+        } finally {
+            releaseModel.countDown();
+        }
+
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(5)));
+    }
+
+    @Test
+    void rejectsInboxMutationsWithoutActiveRunAndReturnsEmptyPendingList() {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(store);
+        SessionSummary summary = sessions.create("Idle inbox");
+        RunService service = new RunService(dependencies(
+                sessions,
+                store,
+                ModelClientProvider.fixed(new EchoModelClient()),
+                ToolRegistry.empty(),
+                30));
+
+        ResponseStatusException enqueueConflict = assertThrows(
+                ResponseStatusException.class,
+                () -> service.enqueue(summary.id(), "queued", Inbox.Target.TURN));
+        ResponseStatusException removeConflict = assertThrows(
+                ResponseStatusException.class,
+                () -> service.removePending(summary.id(), "in-1"));
+        ResponseStatusException replaceConflict = assertThrows(
+                ResponseStatusException.class,
+                () -> service.replacePending(summary.id(), "in-1", "updated"));
+        assertEquals(HttpStatus.CONFLICT, enqueueConflict.getStatusCode());
+        assertEquals(HttpStatus.CONFLICT, removeConflict.getStatusCode());
+        assertEquals(HttpStatus.CONFLICT, replaceConflict.getStatusCode());
+        assertEquals(List.of(), service.pending(summary.id()));
+    }
+
+    @Test
+    void rejectsInboxDeliveryWhenInboxIsFull() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(store);
+        SessionSummary summary = sessions.create("Full inbox");
+        RecordingEmitter emitter = new RecordingEmitter();
+        CountDownLatch modelStarted = new CountDownLatch(1);
+        CountDownLatch releaseModel = new CountDownLatch(1);
+        RunService service = new RunService(dependencies(
+                sessions,
+                store,
+                ModelClientProvider.fixed(blockingFirstCall(
+                        new EchoModelClient(), modelStarted, releaseModel)),
+                ToolRegistry.empty(),
+                30,
+                () -> emitter));
+
+        service.run(summary.id(), "first");
+        assertTrue(modelStarted.await(2, TimeUnit.SECONDS));
+        try {
+            for (int index = 0; index < 32; index++) {
+                service.enqueue(summary.id(), "queued " + index, Inbox.Target.TURN);
+            }
+            ResponseStatusException full = assertThrows(
+                    ResponseStatusException.class,
+                    () -> service.enqueue(summary.id(), "overflow", Inbox.Target.TURN));
+            assertEquals(HttpStatus.TOO_MANY_REQUESTS, full.getStatusCode());
+            assertEquals(32, service.pending(summary.id()).size());
+        } finally {
+            releaseModel.countDown();
+        }
+
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(5)));
+    }
+
+    @Test
+    void publishesInboxSnapshotAfterSuccessfulDelivery() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(store);
+        SessionSummary summary = sessions.create("Inbox SSE");
+        RecordingEmitter emitter = new RecordingEmitter();
+        CountDownLatch modelStarted = new CountDownLatch(1);
+        CountDownLatch releaseModel = new CountDownLatch(1);
+        RunService service = new RunService(dependencies(
+                sessions,
+                store,
+                ModelClientProvider.fixed(blockingFirstCall(
+                        new EchoModelClient(), modelStarted, releaseModel)),
+                ToolRegistry.empty(),
+                30,
+                () -> emitter));
+
+        service.run(summary.id(), "first");
+        assertTrue(modelStarted.await(2, TimeUnit.SECONDS));
+        try {
+            service.enqueue(summary.id(), "fix main", Inbox.Target.STEP);
+
+            SentEvent inbox = emitter.sentEvents().stream()
+                    .filter(event -> event.name().equals("inbox"))
+                    .findFirst()
+                    .orElseThrow();
+            List<Map<String, Object>> payload = JSON.convertValue(
+                    inbox.data(), new TypeReference<>() {});
+            assertEquals(1, payload.size());
+            assertEquals("in-1", payload.getFirst().get("id"));
+            assertEquals("STEP", payload.getFirst().get("target"));
+            assertEquals("fix main", payload.getFirst().get("content"));
+        } finally {
+            releaseModel.countDown();
+        }
+
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(5)));
     }
 
     @Test
@@ -417,6 +661,42 @@ class RunServiceTest {
                 emitterFactory);
     }
 
+    private static ModelClient blockingFirstCall(
+            ModelClient delegate,
+            CountDownLatch started,
+            CountDownLatch release) {
+        AtomicBoolean firstCall = new AtomicBoolean(true);
+        return request -> {
+            if (firstCall.compareAndSet(true, false)) {
+                started.countDown();
+                awaitLatch(release);
+            }
+            return delegate.stream(request);
+        };
+    }
+
+    private static Flow.Publisher<StreamChunk> publisherOf(StreamChunk... chunks) {
+        return subscriber -> {
+            SubmissionPublisher<StreamChunk> publisher = new SubmissionPublisher<>();
+            publisher.subscribe(subscriber);
+            for (StreamChunk chunk : chunks) {
+                publisher.submit(chunk);
+            }
+            publisher.close();
+        };
+    }
+
+    private static void awaitLatch(CountDownLatch latch) {
+        try {
+            if (!latch.await(5, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("timed out waiting for model release");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(exception);
+        }
+    }
+
     private static ModelClient approvalThenResponseModel() {
         AtomicInteger calls = new AtomicInteger();
         StreamChunk.ToolCall call = new StreamChunk.ToolCall(
@@ -461,6 +741,25 @@ class RunServiceTest {
             @Override
             public Reversibility reversibility(String argumentsJson) {
                 return Reversibility.RECOVERABLE;
+            }
+        };
+    }
+
+    private static Tool reversibleFileTool() {
+        return new Tool() {
+            @Override
+            public String name() {
+                return "file";
+            }
+
+            @Override
+            public ToolResult execute(String argumentsJson) {
+                return new ToolResult("checked", false, 0L);
+            }
+
+            @Override
+            public Reversibility reversibility(String argumentsJson) {
+                return Reversibility.REVERSIBLE;
             }
         };
     }

@@ -11,6 +11,7 @@ import cn.yhjyhj.weaver.core.loop.context.RunRequest;
 import cn.yhjyhj.weaver.core.loop.context.StepResult;
 import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.phase.Phase;
+import java.util.List;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 
@@ -157,17 +158,74 @@ public final class RunLoop {
      * @return 输入是否成功进入当前运行的待处理队列
      */
     public boolean enqueue(String input, Inbox.Target target) {
+        return enqueueEntry(input, target) != null;
+    }
+
+    /**
+     * 运行期间投递一条输入并返回已创建的条目。
+     *
+     * <p>该入口供需要立即返回条目标识的传输层使用；入队资格与
+     * {@link #enqueue(String, Inbox.Target)} 完全一致。
+     *
+     * @param input 待处理用户输入
+     * @param target 输入生效目标
+     * @return 成功入队的新条目；未运行、空白、队列已满或已取消时返回 null
+     */
+    public Inbox.Entry enqueueEntry(String input, Inbox.Target target) {
         Objects.requireNonNull(input, "input");
         Objects.requireNonNull(target, "target");
         if (!running || cancellation.isCancelled() || input.isBlank()) {
-            return false;
+            return null;
         }
-        return inbox.offer(input, target) != null;
+        return inbox.offer(input, target);
     }
 
     /** 请求取消当前运行；立即触发已注册回调，并保证循环在下一步判定中止。 */
     public void cancel() {
         cancellation.cancel();
+    }
+
+    /**
+     * 返回当前未消费输入的快照；未运行时为空列表。
+     *
+     * <p>快照按到达顺序排列且不可修改，只反映调用瞬间的信箱状态。
+     *
+     * @return 当前未消费条目；运行未开始时为空列表
+     */
+    public List<Inbox.Entry> pendingInputs() {
+        if (!running) {
+            return List.of();
+        }
+        return inbox.snapshot();
+    }
+
+    /**
+     * 撤回一条未消费输入；未运行或 id 不存在时返回 false。
+     *
+     * @param id 待撤回条目标识
+     * @return 条目是否存在并成功移除
+     */
+    public boolean removePending(String id) {
+        if (!running || id == null) {
+            return false;
+        }
+        return inbox.remove(id);
+    }
+
+    /**
+     * 修改一条未消费输入的文本；未运行、id 不存在或空白文本时返回 null。
+     *
+     * <p>修改只替换文本，条目 id、生效目标与原始到达顺序保持不变。
+     *
+     * @param id 待修改条目标识
+     * @param content 新的非空白用户输入
+     * @return 替换后的条目；无法修改时返回 null
+     */
+    public Inbox.Entry replacePending(String id, String content) {
+        if (!running || id == null || content == null || content.isBlank()) {
+            return null;
+        }
+        return inbox.replace(id, content);
     }
 
     /**

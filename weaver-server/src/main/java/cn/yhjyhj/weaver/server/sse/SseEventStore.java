@@ -10,7 +10,7 @@ import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 在事件落库后把工具执行结果转发到当前 SSE 连接。
+ * 在事件落库后把用户消息与工具执行结果转发到当前 SSE 连接。
  *
  * <p>事实源优先：只有 delegate 成功分配 seq 后才发送 SSE；发送失败只记录调试日志，
  * 不影响事件持久化或返回序号。
@@ -27,7 +27,7 @@ public final class SseEventStore implements SessionEventStore {
     }
 
     /**
-     * 先追加事件，再按事件类型决定是否转发工具结果。
+     * 先追加事件，再按事件类型决定是否转发用户消息或工具结果。
      *
      * @param sessionId 会话标识
      * @param event 待持久化的会话事件
@@ -38,6 +38,9 @@ public final class SseEventStore implements SessionEventStore {
         long seq = delegate.append(sessionId, event);
         if (event instanceof SessionEvent.ToolCallCompleted completed) {
             sendToolResult(completed);
+        } else if (event instanceof SessionEvent.MessageAdded message
+                && message.role() == SessionEvent.Role.USER) {
+            sendUserMessage(message);
         }
         return seq;
     }
@@ -74,9 +77,23 @@ public final class SseEventStore implements SessionEventStore {
         }
     }
 
+    private void sendUserMessage(SessionEvent.MessageAdded message) {
+        UserMessageEvent payload = new UserMessageEvent(message.content());
+        try {
+            // 与流式输出共享发送边界；包成 JSON 可保留 SSE data 行首空格。
+            synchronized (sender) {
+                sender.send("user_message", payload);
+            }
+        } catch (IOException exception) {
+            log.debug("failed to send user message", exception);
+        }
+    }
+
     private record ToolResultEvent(
             String callId,
             String content,
             boolean isError,
             long durationMs) {}
+
+    private record UserMessageEvent(String text) {}
 }

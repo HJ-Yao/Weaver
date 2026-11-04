@@ -109,9 +109,11 @@ class InboxTest {
 
         assertTrue(inbox.remove(removable.id()));
         assertFalse(inbox.remove("missing"));
-        assertTrue(inbox.replace(replaceable.id(), "new"));
-        assertFalse(inbox.replace("missing", "new"));
-        assertFalse(inbox.replace(replaceable.id(), " \t"));
+        assertEquals(
+                new Inbox.Entry(replaceable.id(), Inbox.Target.TURN, "new"),
+                inbox.replace(replaceable.id(), "new"));
+        assertNull(inbox.replace("missing", "new"));
+        assertNull(inbox.replace(replaceable.id(), " \t"));
 
         assertEquals(
                 List.of(new Inbox.Entry(

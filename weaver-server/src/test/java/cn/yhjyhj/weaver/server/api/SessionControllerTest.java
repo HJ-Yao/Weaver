@@ -5,6 +5,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -14,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import cn.yhjyhj.weaver.core.events.SessionSnapshot;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.StoredEvent;
+import cn.yhjyhj.weaver.core.loop.context.Inbox;
 import cn.yhjyhj.weaver.server.api.dto.SessionDetail;
 import cn.yhjyhj.weaver.server.api.dto.SessionSummary;
 import cn.yhjyhj.weaver.server.service.RunService;
@@ -24,9 +26,11 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @WebMvcTest(SessionController.class)
@@ -199,5 +203,133 @@ class SessionControllerTest {
                 .andExpect(status().isNotFound());
 
         verify(runService, never()).cancel("missing");
+    }
+
+    @Test
+    void rejectsInboxDeliveryWithoutActiveRun() throws Exception {
+        when(runService.enqueue("session-1", "queued", Inbox.Target.TURN))
+                .thenThrow(new ResponseStatusException(
+                        HttpStatus.CONFLICT, "no active run"));
+
+        mockMvc.perform(post("/api/sessions/session-1/inbox")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"queued\"}"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void acceptsInboxDeliveryDuringActiveRun() throws Exception {
+        when(runService.enqueue("session-1", "steer now", Inbox.Target.STEP))
+                .thenReturn(new Inbox.Entry("in-3", Inbox.Target.STEP, "steer now"));
+
+        mockMvc.perform(post("/api/sessions/session-1/inbox")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"steer now\",\"target\":\"STEP\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.id").value("in-3"))
+                .andExpect(jsonPath("$.target").value("STEP"))
+                .andExpect(jsonPath("$.content").value("steer now"));
+
+        verify(runService).enqueue("session-1", "steer now", Inbox.Target.STEP);
+    }
+
+    @Test
+    void listsPendingInboxEntries() throws Exception {
+        when(runService.pending("session-1")).thenReturn(List.of(
+                new Inbox.Entry("in-1", Inbox.Target.STEP, "fix main"),
+                new Inbox.Entry("in-2", Inbox.Target.TURN, "then test")));
+
+        mockMvc.perform(get("/api/sessions/session-1/inbox"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value("in-1"))
+                .andExpect(jsonPath("$[0].target").value("STEP"))
+                .andExpect(jsonPath("$[0].content").value("fix main"))
+                .andExpect(jsonPath("$[1].id").value("in-2"))
+                .andExpect(jsonPath("$[1].target").value("TURN"))
+                .andExpect(jsonPath("$[1].content").value("then test"));
+    }
+
+    @Test
+    void listsEmptyInboxWithoutActiveRun() throws Exception {
+        when(runService.pending("session-1")).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/sessions/session-1/inbox"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void replacesPendingInboxEntry() throws Exception {
+        Inbox.Entry updated = new Inbox.Entry("in-1", Inbox.Target.STEP, "only main");
+        when(runService.replacePending("session-1", "in-1", "only main"))
+                .thenReturn(updated);
+
+        mockMvc.perform(patch("/api/sessions/session-1/inbox/in-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"only main\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("in-1"))
+                .andExpect(jsonPath("$.target").value("STEP"))
+                .andExpect(jsonPath("$.content").value("only main"));
+    }
+
+    @Test
+    void returnsNotFoundWhenReplacingUnknownInboxEntry() throws Exception {
+        when(runService.replacePending("session-1", "missing", "only main"))
+                .thenReturn(null);
+
+        mockMvc.perform(patch("/api/sessions/session-1/inbox/missing")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"only main\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void deletesPendingInboxEntry() throws Exception {
+        when(runService.removePending("session-1", "in-1")).thenReturn(true);
+
+        mockMvc.perform(delete("/api/sessions/session-1/inbox/in-1"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void returnsNotFoundWhenDeletingUnknownInboxEntry() throws Exception {
+        when(runService.removePending("session-1", "missing")).thenReturn(false);
+
+        mockMvc.perform(delete("/api/sessions/session-1/inbox/missing"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void rejectsBlankInboxContent() throws Exception {
+        mockMvc.perform(post("/api/sessions/session-1/inbox")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\" \\t\"}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(patch("/api/sessions/session-1/inbox/in-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsUnknownInboxTarget() throws Exception {
+        mockMvc.perform(post("/api/sessions/session-1/inbox")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"queued\",\"target\":\"BOGUS\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void returnsNotFoundForInboxOnUnknownSession() throws Exception {
+        when(runService.enqueue("missing", "queued", Inbox.Target.TURN))
+                .thenThrow(new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "session not found"));
+
+        mockMvc.perform(post("/api/sessions/missing/inbox")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"queued\"}"))
+                .andExpect(status().isNotFound());
     }
 }

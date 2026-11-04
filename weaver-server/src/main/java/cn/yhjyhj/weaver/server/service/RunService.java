@@ -5,13 +5,16 @@ import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.loop.RunLoop;
 import cn.yhjyhj.weaver.core.loop.RunLoopConfig;
+import cn.yhjyhj.weaver.core.loop.context.Inbox;
 import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
+import cn.yhjyhj.weaver.server.api.dto.InboxEntryView;
 import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import cn.yhjyhj.weaver.server.sse.SseApprovalGate;
 import cn.yhjyhj.weaver.server.sse.SseChannel;
 import cn.yhjyhj.weaver.server.sse.SseStreamSink;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -71,10 +74,7 @@ public final class RunService {
      * @throws ResponseStatusException 会话不存在时返回 404；同一会话已有运行时返回 409
      */
     public SseEmitter run(String sessionId, String content) {
-        if (sessions.find(sessionId).isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND, "session not found: " + sessionId);
-        }
+        requireSession(sessionId);
         if (activeRuns.containsKey(sessionId)) {
             throw conflict(sessionId);
         }
@@ -82,7 +82,7 @@ public final class RunService {
         SseEmitter emitter = emitterFactory.get();
         SseChannel channel = SseChannel.bind(emitter);
         SseApprovalGate gate = channel.approvalGate(approvalTimeout);
-        ActiveRun activeRun = new ActiveRun(gate);
+        ActiveRun activeRun = new ActiveRun(gate, channel);
         emitter.onCompletion(gate::cancelAll);
         emitter.onTimeout(gate::cancelAll);
         emitter.onError(ignored -> gate.cancelAll());
@@ -144,6 +144,89 @@ public final class RunService {
     public boolean resolveApproval(String sessionId, String callId, boolean approved) {
         ActiveRun activeRun = activeRuns.get(sessionId);
         return activeRun != null && activeRun.gate().resolve(callId, approved);
+    }
+
+    /**
+     * 向活动运行投递一条待消费输入，并立即把新的信箱快照推给当前 SSE 响应。
+     *
+     * @param sessionId 会话标识
+     * @param content 非空白用户输入
+     * @param target 输入生效目标
+     * @return 成功创建的待消费条目
+     * @throws ResponseStatusException 会话不存在时返回 404；运行未挂接或投递失败时返回
+     *     409；信箱已满时返回 429
+     */
+    public Inbox.Entry enqueue(
+            String sessionId, String content, Inbox.Target target) {
+        requireSession(sessionId);
+        ActiveRun activeRun = activeRunWithLoop(sessionId);
+        RunLoop loop = activeRun.loop().get();
+        if (loop.pendingInputs().size() >= RunLoop.DEFAULT_INBOX_CAPACITY) {
+            throw inboxFull(sessionId);
+        }
+        Inbox.Entry entry = loop.enqueueEntry(content, target);
+        if (entry == null) {
+            throw noActiveRun(sessionId);
+        }
+        publishInbox(activeRun);
+        return entry;
+    }
+
+    /**
+     * 返回活动运行当前未消费的信箱条目。
+     *
+     * <p>无活动运行或运行尚未挂接时返回空列表，便于客户端恢复界面。
+     *
+     * @param sessionId 会话标识
+     * @return 按到达顺序排列的只读快照
+     * @throws ResponseStatusException 会话不存在时返回 404
+     */
+    public List<Inbox.Entry> pending(String sessionId) {
+        requireSession(sessionId);
+        ActiveRun activeRun = activeRuns.get(sessionId);
+        if (activeRun == null) {
+            return List.of();
+        }
+        RunLoop loop = activeRun.loop().get();
+        return loop == null ? List.of() : loop.pendingInputs();
+    }
+
+    /**
+     * 撤回活动运行中的一条待消费输入，并推送最新快照。
+     *
+     * @param sessionId 会话标识
+     * @param id 待撤回条目标识
+     * @return 条目存在并成功撤回时为 true；未知条目为 false
+     * @throws ResponseStatusException 会话不存在时返回 404；没有活动运行时返回 409
+     */
+    public boolean removePending(String sessionId, String id) {
+        requireSession(sessionId);
+        ActiveRun activeRun = activeRunWithLoop(sessionId);
+        RunLoop loop = activeRun.loop().get();
+        if (!loop.removePending(id)) {
+            return false;
+        }
+        publishInbox(activeRun);
+        return true;
+    }
+
+    /**
+     * 修改活动运行中的一条待消费输入，并推送最新快照。
+     *
+     * @param sessionId 会话标识
+     * @param id 待修改条目标识
+     * @param content 替换后的非空白文本
+     * @return 替换后的条目；未知条目或空白文本时为 null
+     * @throws ResponseStatusException 会话不存在时返回 404；没有活动运行时返回 409
+     */
+    public Inbox.Entry replacePending(String sessionId, String id, String content) {
+        requireSession(sessionId);
+        ActiveRun activeRun = activeRunWithLoop(sessionId);
+        Inbox.Entry entry = activeRun.loop().get().replacePending(id, content);
+        if (entry != null) {
+            publishInbox(activeRun);
+        }
+        return entry;
     }
 
     /**
@@ -209,22 +292,65 @@ public final class RunService {
                 HttpStatus.CONFLICT, "run already active: " + sessionId);
     }
 
+    private void requireSession(String sessionId) {
+        if (sessions.find(sessionId).isEmpty()) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "session not found: " + sessionId);
+        }
+    }
+
+    private ActiveRun activeRunWithLoop(String sessionId) {
+        ActiveRun activeRun = activeRuns.get(sessionId);
+        if (activeRun == null || activeRun.loop().get() == null) {
+            throw noActiveRun(sessionId);
+        }
+        return activeRun;
+    }
+
+    private static ResponseStatusException noActiveRun(String sessionId) {
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT, "no active run: " + sessionId);
+    }
+
+    private static ResponseStatusException inboxFull(String sessionId) {
+        return new ResponseStatusException(
+                HttpStatus.TOO_MANY_REQUESTS, "inbox is full: " + sessionId);
+    }
+
+    private static void publishInbox(ActiveRun activeRun) {
+        RunLoop loop = activeRun.loop().get();
+        if (loop == null) {
+            return;
+        }
+        List<InboxEntryView> entries = loop.pendingInputs().stream()
+                .map(InboxEntryView::from)
+                .toList();
+        activeRun.channel().emit("inbox", entries);
+    }
+
     /** 单个会话的活动运行及其取消状态。 */
     private static final class ActiveRun {
 
         /** 等待用户审批的 SSE 闸门。 */
         private final SseApprovalGate gate;
+        /** 当前运行绑定的 SSE 响应通道，用于推送信箱快照。 */
+        private final SseChannel channel;
         /** 是否由用户主动请求取消，用于区分用户取消与步数上限。 */
         private final AtomicBoolean cancelRequested = new AtomicBoolean();
         /** 虚拟线程创建后挂接的运行循环；挂接前取消由取消位兜底。 */
         private final AtomicReference<RunLoop> loop = new AtomicReference<>();
 
-        private ActiveRun(SseApprovalGate gate) {
+        private ActiveRun(SseApprovalGate gate, SseChannel channel) {
             this.gate = Objects.requireNonNull(gate, "gate");
+            this.channel = Objects.requireNonNull(channel, "channel");
         }
 
         private SseApprovalGate gate() {
             return gate;
+        }
+
+        private SseChannel channel() {
+            return channel;
         }
 
         private AtomicBoolean cancelRequested() {
