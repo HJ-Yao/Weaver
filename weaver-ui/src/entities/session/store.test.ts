@@ -16,6 +16,7 @@ vi.mock('@/shared/api/sessions', () => ({
     list: vi.fn(),
     create: vi.fn(),
     detail: vi.fn(),
+    rename: vi.fn(),
     remove: vi.fn(),
     resolveApproval: vi.fn(),
     cancelRun: vi.fn(),
@@ -170,13 +171,88 @@ describe('useSessionStore', () => {
     };
     mockedSessionApi.create.mockResolvedValue(createdSession);
 
-    await useSessionStore.getState().createSession(createdSession.title);
+    await useSessionStore.getState().createSession();
 
     const state = useSessionStore.getState();
-    expect(mockedSessionApi.create).toHaveBeenCalledWith(createdSession.title);
+    expect(mockedSessionApi.create).toHaveBeenCalledWith();
     expect(state.sessions.at(-1)).toEqual(createdSession);
     expect(state.activeSessionId).toBe(createdSession.id);
     expect(state.transcript).toEqual([]);
+  });
+
+  it('renames a session in place after the server accepts it', async () => {
+    const renamed = { ...firstSession, title: 'Renamed' };
+    mockedSessionApi.rename.mockResolvedValue(renamed);
+    useSessionStore.setState({ sessions: [firstSession, secondSession] });
+
+    await expect(
+      useSessionStore.getState().renameSession(firstSession.id, 'Renamed'),
+    ).resolves.toBe(true);
+
+    expect(mockedSessionApi.rename).toHaveBeenCalledWith(firstSession.id, 'Renamed');
+    expect(useSessionStore.getState().sessions).toEqual([renamed, secondSession]);
+  });
+
+  it('deletes the current session and selects the next one', async () => {
+    mockedSessionApi.remove.mockResolvedValue(undefined);
+    mockedSessionApi.detail.mockResolvedValue(detailFor(secondSession, 'second transcript'));
+    useSessionStore.setState({
+      sessions: [firstSession, secondSession],
+      activeSessionId: firstSession.id,
+      transcript: transcriptFromSnapshot(detailFor(firstSession, 'old transcript').snapshot),
+      lastSeq: 3,
+      pending: [{ id: 'in-old', target: 'STEP', content: 'old' }],
+    });
+
+    await expect(useSessionStore.getState().deleteSession(firstSession.id)).resolves.toBe(true);
+
+    const state = useSessionStore.getState();
+    expect(mockedSessionApi.remove).toHaveBeenCalledWith(firstSession.id);
+    expect(state.sessions).toEqual([secondSession]);
+    expect(state.activeSessionId).toBe(secondSession.id);
+    expect(state.transcript).toEqual(
+      transcriptFromSnapshot(detailFor(secondSession, 'second transcript').snapshot),
+    );
+  });
+
+  it('clears the active session when deleting the last one', async () => {
+    mockedSessionApi.remove.mockResolvedValue(undefined);
+    useSessionStore.setState({
+      sessions: [firstSession],
+      activeSessionId: firstSession.id,
+      transcript: transcriptFromSnapshot(detailFor(firstSession, 'last transcript').snapshot),
+      lastSeq: 7,
+      pending: [{ id: 'in-last', target: 'TURN', content: 'last' }],
+    });
+
+    await expect(useSessionStore.getState().deleteSession(firstSession.id)).resolves.toBe(true);
+
+    const state = useSessionStore.getState();
+    expect(state.sessions).toEqual([]);
+    expect(state.activeSessionId).toBeNull();
+    expect(state.transcript).toEqual([]);
+    expect(state.lastSeq).toBe(0);
+    expect(state.pending).toEqual([]);
+  });
+
+  it('updates the generated title on the matching session', () => {
+    let handlers: StreamHandlers | undefined;
+    mockedStreamMessage.mockImplementation((_sessionId, _content, streamHandlers) => {
+      handlers = streamHandlers;
+      return new Promise<void>(() => {});
+    });
+    useSessionStore.setState({
+      sessions: [firstSession, secondSession],
+      activeSessionId: firstSession.id,
+    });
+
+    useSessionStore.getState().sendMessage('name this session');
+    handlers?.onSessionTitle?.('自动命名');
+
+    expect(useSessionStore.getState().sessions).toEqual([
+      { ...firstSession, title: '自动命名' },
+      secondSession,
+    ]);
   });
 
   it('creates a session before streaming the first welcome-page message', async () => {
@@ -195,7 +271,7 @@ describe('useSessionStore', () => {
 
     useSessionStore.getState().sendMessage('  build the welcome page  ');
 
-    expect(mockedSessionApi.create).toHaveBeenCalledWith('新会话');
+    expect(mockedSessionApi.create).toHaveBeenCalledWith();
     expect(mockedStreamMessage).not.toHaveBeenCalled();
 
     resolveCreate(createdSession);

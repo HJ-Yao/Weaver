@@ -77,4 +77,17 @@ describe('streamMessage', () => {
 
     expect(messages).toEqual(['  保留前导空格']);
   });
+
+  it('decodes generated session titles', async () => {
+    const frames = 'event:session_title\ndata:{"title":"修复登录页"}\n\n';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(frames)));
+
+    const titles: string[] = [];
+
+    await streamMessage('session-1', 'hi', {
+      onSessionTitle: (title) => titles.push(title),
+    });
+
+    expect(titles).toEqual(['修复登录页']);
+  });
 });

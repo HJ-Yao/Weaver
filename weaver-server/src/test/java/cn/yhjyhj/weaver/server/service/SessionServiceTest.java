@@ -2,6 +2,7 @@ package cn.yhjyhj.weaver.server.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -115,8 +116,46 @@ class SessionServiceTest {
     }
 
     @Test
-    void rejectsNullSessionTitleOnCreate() {
-        assertThrows(IllegalArgumentException.class, () -> service.create(null));
+    void createsUnnamedSessionAndKeepsStoredTitleNull() {
+        SessionSummary created = service.create(null);
+
+        assertEquals("新会话", created.title());
+        assertNull(sessions.find(created.id()).orElseThrow().title());
+    }
+
+    @Test
+    void createsUnnamedSessionFromBlankTitle() {
+        SessionSummary created = service.create("   ");
+
+        assertEquals("新会话", created.title());
+        assertNull(sessions.find(created.id()).orElseThrow().title());
+    }
+
+    @Test
+    void reportsWhetherStoredTitleIsUnnamed() {
+        SessionSummary unnamed = service.create(null);
+        SessionSummary named = service.create("Named");
+
+        assertTrue(service.isUnnamed(unnamed.id()));
+        assertFalse(service.isUnnamed(named.id()));
+        assertFalse(service.isUnnamed("missing"));
+    }
+
+    @Test
+    void renameIfUnnamedWritesOnlyWhileTitleIsNull() {
+        SessionSummary unnamed = service.create(null);
+
+        assertTrue(service.renameIfUnnamed(unnamed.id(), "Generated"));
+        assertFalse(service.renameIfUnnamed(unnamed.id(), "Replacement"));
+        assertEquals("Generated", service.find(unnamed.id()).orElseThrow().title());
+    }
+
+    @Test
+    void renameIfUnnamedDoesNotOverwriteManualTitle() {
+        SessionSummary named = service.create("Manual");
+
+        assertFalse(service.renameIfUnnamed(named.id(), "Generated"));
+        assertEquals("Manual", service.find(named.id()).orElseThrow().title());
     }
 
     @Test

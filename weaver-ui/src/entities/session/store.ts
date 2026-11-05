@@ -44,8 +44,12 @@ interface SessionState {
   loadSessions: (force?: boolean) => Promise<void>;
   /** 打开会话并加载服务端快照。 */
   selectSession: (id: string) => Promise<void>;
-  /** 创建新会话并将其设为当前会话。 */
-  createSession: (title?: string) => Promise<void>;
+  /** 创建未命名新会话并将其设为当前会话。 */
+  createSession: () => Promise<void>;
+  /** 修改会话标题；成功返回 `true`。 */
+  renameSession: (id: string, title: string) => Promise<boolean>;
+  /** 删除会话；删除当前会话时自动选择列表中的下一项。 */
+  deleteSession: (id: string) => Promise<boolean>;
   sendMessage: (content: string) => void;
   /** 运行中投递一条输入；成功返回 `true`。没有活动运行时返回 `false`，由界面提示。 */
   enqueueMessage: (content: string, target: InboxTargetDto) => Promise<boolean>;
@@ -190,6 +194,13 @@ export const useSessionStore = create<SessionState>()((set, get) => {
         };
         set((state) => ({ transcript: [...state.transcript, message] }));
       },
+      onSessionTitle: (title) => {
+        set((state) => ({
+          sessions: state.sessions.map((session) =>
+            session.id === sessionId ? { ...session, title } : session,
+          ),
+        }));
+      },
       onAborted: () => {
         updateItem(reply.id, (item) =>
           item.kind === 'message' ? { ...item, streaming: false, stopped: true } : item,
@@ -291,9 +302,9 @@ export const useSessionStore = create<SessionState>()((set, get) => {
       }
     },
 
-    createSession: async (title = '新会话') => {
+    createSession: async () => {
       try {
-        const session = await sessionApi.create(title);
+        const session = await sessionApi.create();
         // 新会话本身就是空的，因此要使仍在进行的详情请求失效，避免旧会话覆盖它。
         detailRequestId += 1;
         set((state) => ({
@@ -310,6 +321,57 @@ export const useSessionStore = create<SessionState>()((set, get) => {
           error: `新建会话失败：${readableError(error)}`,
         });
       }
+    },
+
+    renameSession: async (id, title) => {
+      const nextTitle = title.trim();
+      if (!nextTitle) return false;
+
+      try {
+        const updated = await sessionApi.rename(id, nextTitle);
+        set((state) => ({
+          sessions: state.sessions.map((session) =>
+            session.id === id ? { ...session, title: updated.title } : session,
+          ),
+        }));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
+    deleteSession: async (id) => {
+      try {
+        await sessionApi.remove(id);
+      } catch {
+        return false;
+      }
+
+      const deletedActiveSession = get().activeSessionId === id;
+      const remaining = get().sessions.filter((session) => session.id !== id);
+      if (!deletedActiveSession) {
+        set({ sessions: remaining });
+        return true;
+      }
+
+      // 删除当前会话后先清空旧投影，再选择剩余列表中的第一项。
+      detailRequestId += 1;
+      set({
+        sessions: remaining,
+        activeSessionId: null,
+        transcript: [],
+        lastSeq: 0,
+        pending: [],
+        running: false,
+      });
+
+      const nextSession = remaining[0];
+      if (nextSession) {
+        await get().selectSession(nextSession.id);
+      } else {
+        set({ status: 'ready', error: null });
+      }
+      return true;
     },
 
     sendMessage: (content) => {

@@ -36,21 +36,18 @@ public class SessionService {
     }
 
     /**
-     * 创建空会话。
+     * 创建空会话；省略或留空标题时先以 null 落库，等待首轮后自动命名。
      *
-     * @param title 非空白会话标题
-     * @return 新建会话的元数据
-     * @throws IllegalArgumentException 标题为空或仅含空白时抛出
+     * @param title 可选的非空白会话标题
+     * @return 新建会话的元数据；未命名时显示「新会话」
      */
     public SessionSummary create(String title) {
-        if (title == null || title.isBlank()) {
-            throw new IllegalArgumentException("title must not be blank");
-        }
+        String storedTitle = title == null || title.isBlank() ? null : title;
         Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
         SessionSummary summary =
-                new SessionSummary(UUID.randomUUID().toString(), title, createdAt);
-        sessions.create(summary.id(), title, createdAt);
-        return summary;
+                new SessionSummary(UUID.randomUUID().toString(), storedTitle, createdAt);
+        sessions.create(summary.id(), storedTitle, createdAt);
+        return displaySummary(summary);
     }
 
     /**
@@ -72,6 +69,33 @@ public class SessionService {
      */
     public Optional<SessionSummary> find(String id) {
         return sessions.find(id).map(SessionService::displaySummary);
+    }
+
+    /**
+     * 判断会话标题是否仍为空。
+     *
+     * @param id 会话标识
+     * @return 会话存在且持久化标题为 null 时返回 true
+     */
+    public boolean isUnnamed(String id) {
+        return sessions.find(id)
+                .map(summary -> summary.title() == null)
+                .orElse(false);
+    }
+
+    /**
+     * 仅在标题为 null 时写入；返回是否写入成功。
+     *
+     * @param id 会话标识
+     * @param title 自动生成的展示标题
+     * @return 会话存在且原标题为 null 并完成写入时返回 true
+     * @throws IllegalArgumentException 标题为空或仅含空白时抛出
+     */
+    public boolean renameIfUnnamed(String id, String title) {
+        if (title == null || title.isBlank()) {
+            throw new IllegalArgumentException("title must not be blank");
+        }
+        return sessions.renameIfUnnamed(id, title);
     }
 
     /**

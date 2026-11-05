@@ -12,6 +12,7 @@ import cn.yhjyhj.weaver.core.tool.builtin.ShellTool;
 import cn.yhjyhj.weaver.server.service.RunService;
 import cn.yhjyhj.weaver.server.service.RunServiceDependencies;
 import cn.yhjyhj.weaver.server.service.SessionService;
+import cn.yhjyhj.weaver.server.service.SessionTitleGenerator;
 import cn.yhjyhj.weaver.server.settings.DefaultModelClientProvider;
 import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import cn.yhjyhj.weaver.server.settings.ModelSettingsService;
@@ -157,11 +158,22 @@ public class WeaverConfig {
     }
 
     /**
+     * 创建首轮后自动命名会话的标题生成器。
+     *
+     * @return 硬超时为 5 秒的标题生成器
+     */
+    @Bean
+    public SessionTitleGenerator sessionTitleGenerator() {
+        return new SessionTitleGenerator(Duration.ofSeconds(5));
+    }
+
+    /**
      * 使用进程级依赖与应用配置创建运行服务。
      *
      * @param sessions 会话元数据服务
      * @param eventStore 会话事件事实源
      * @param modelProvider 每轮解析当前模型的 provider
+     * @param titleGenerator 首轮后生成会话标题的辅助生成器
      * @param tools 工具注册表
      * @param approvalPolicy 工具审批策略
      * @param approvalGrants 会话审批授权记录
@@ -173,6 +185,7 @@ public class WeaverConfig {
             SessionService sessions,
             SessionEventStore eventStore,
             ModelClientProvider modelProvider,
+            SessionTitleGenerator titleGenerator,
             ToolRegistry tools,
             ApprovalPolicy approvalPolicy,
             ApprovalGrantStore approvalGrants,
@@ -181,6 +194,7 @@ public class WeaverConfig {
                 sessions,
                 eventStore,
                 modelProvider,
+                titleGenerator,
                 tools,
                 approvalPolicy,
                 approvalGrants,

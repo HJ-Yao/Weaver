@@ -52,6 +52,8 @@ class RunServiceDependenciesTest {
             throw new UnsupportedOperationException();
         };
         ModelClientProvider modelProvider = ModelClientProvider.fixed(model);
+        SessionTitleGenerator titleGenerator =
+                new SessionTitleGenerator(Duration.ofSeconds(1));
         ToolRegistry tools = ToolRegistry.empty();
         ApprovalPolicy approvalPolicy = RuleBasedApprovalPolicy.defaults();
         ApprovalGrantStore approvalGrants = ApprovalGrantStore.none();
@@ -65,6 +67,7 @@ class RunServiceDependenciesTest {
                                 null,
                                 eventStore,
                                 modelProvider,
+                                titleGenerator,
                                 tools,
                                 approvalPolicy,
                                 approvalGrants,
@@ -77,6 +80,7 @@ class RunServiceDependenciesTest {
                                 sessions,
                                 null,
                                 modelProvider,
+                                titleGenerator,
                                 tools,
                                 approvalPolicy,
                                 approvalGrants,
@@ -89,6 +93,7 @@ class RunServiceDependenciesTest {
                                 sessions,
                                 eventStore,
                                 null,
+                                titleGenerator,
                                 tools,
                                 approvalPolicy,
                                 approvalGrants,
@@ -102,6 +107,7 @@ class RunServiceDependenciesTest {
                                 eventStore,
                                 modelProvider,
                                 null,
+                                tools,
                                 approvalPolicy,
                                 approvalGrants,
                                 10,
@@ -113,6 +119,20 @@ class RunServiceDependenciesTest {
                                 sessions,
                                 eventStore,
                                 modelProvider,
+                                titleGenerator,
+                                null,
+                                approvalPolicy,
+                                approvalGrants,
+                                10,
+                                Duration.ofSeconds(1),
+                                emitterFactory)),
+                () -> assertThrows(
+                        NullPointerException.class,
+                        () -> new RunServiceDependencies(
+                                sessions,
+                                eventStore,
+                                modelProvider,
+                                titleGenerator,
                                 tools,
                                 null,
                                 approvalGrants,
@@ -125,6 +145,7 @@ class RunServiceDependenciesTest {
                                 sessions,
                                 eventStore,
                                 modelProvider,
+                                titleGenerator,
                                 tools,
                                 approvalPolicy,
                                 null,
@@ -137,6 +158,7 @@ class RunServiceDependenciesTest {
                                 sessions,
                                 eventStore,
                                 modelProvider,
+                                titleGenerator,
                                 tools,
                                 approvalPolicy,
                                 approvalGrants,
@@ -149,6 +171,7 @@ class RunServiceDependenciesTest {
                                 sessions,
                                 eventStore,
                                 modelProvider,
+                                titleGenerator,
                                 tools,
                                 approvalPolicy,
                                 approvalGrants,
@@ -173,6 +196,7 @@ class RunServiceDependenciesTest {
                 ModelClientProvider.fixed(request -> {
                     throw new UnsupportedOperationException();
                 }),
+                new SessionTitleGenerator(Duration.ofSeconds(1)),
                 ToolRegistry.empty(),
                 RuleBasedApprovalPolicy.defaults(),
                 ApprovalGrantStore.none(),

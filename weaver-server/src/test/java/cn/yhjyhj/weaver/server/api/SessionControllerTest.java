@@ -64,11 +64,16 @@ class SessionControllerTest {
     }
 
     @Test
-    void rejectsBlankSessionTitle() throws Exception {
+    void createsSessionWithoutTitleAndReturnsDisplayFallback() throws Exception {
+        when(sessionService.create(null))
+                .thenReturn(new SessionSummary("session-unnamed", "新会话", CREATED_AT));
+
         mockMvc.perform(post("/api/sessions")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"title\":\" \"}"))
-                .andExpect(status().isBadRequest());
+                        .content("{}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value("session-unnamed"))
+                .andExpect(jsonPath("$.title").value("新会话"));
     }
 
     @Test

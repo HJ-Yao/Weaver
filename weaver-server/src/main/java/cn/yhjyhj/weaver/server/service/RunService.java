@@ -2,6 +2,7 @@ package cn.yhjyhj.weaver.server.service;
 
 import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
+import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.loop.RunLoop;
 import cn.yhjyhj.weaver.core.loop.RunLoopConfig;
@@ -33,6 +34,7 @@ public final class RunService {
     private final SessionService sessions; // 会话存在性边界
     private final SessionEventStore eventStore; // 运行事实源
     private final ModelClientProvider modelProvider; // 每轮解析当前模型的入口
+    private final SessionTitleGenerator titleGenerator; // 首轮后生成会话标题
     private final ToolRegistry tools; // 进程级工具注册表
     private final ApprovalPolicy approvalPolicy; // 工具审批策略
     private final ApprovalGrantStore approvalGrants; // 会话审批授权记录
@@ -53,6 +55,7 @@ public final class RunService {
         this.sessions = validatedDependencies.sessions();
         this.eventStore = validatedDependencies.eventStore();
         this.modelProvider = validatedDependencies.modelProvider();
+        this.titleGenerator = validatedDependencies.titleGenerator();
         this.tools = validatedDependencies.tools();
         this.approvalPolicy = validatedDependencies.approvalPolicy();
         this.approvalGrants = validatedDependencies.approvalGrants();
@@ -286,6 +289,7 @@ public final class RunService {
             loop.cancel();
         }
         loop.run(sessionId, content);
+        generateTitleIfNeeded(sessionId, channel);
         sessions.touch(sessionId);
 
         if (loop.finalPhase().aborted()) {
@@ -296,6 +300,35 @@ public final class RunService {
                 channel.emit("aborted", new AbortedEvent(cancelled ? "cancelled" : "max-steps"));
             }
         }
+    }
+
+    private void generateTitleIfNeeded(String sessionId, SseChannel channel) {
+        if (!sessions.isUnnamed(sessionId)) {
+            return;
+        }
+        String firstUserMessage = firstUserMessage(sessionId);
+        if (firstUserMessage == null) {
+            return;
+        }
+        try {
+            String title = titleGenerator.generate(modelProvider.current(), firstUserMessage);
+            if (sessions.renameIfUnnamed(sessionId, title)) {
+                channel.emit("session_title", new SessionTitleEvent(title));
+            }
+        } catch (RuntimeException exception) {
+            log.debug("session title generation failed: session={}", sessionId, exception);
+        }
+    }
+
+    private String firstUserMessage(String sessionId) {
+        return sessions.events(sessionId).stream()
+                .map(storedEvent -> storedEvent.event())
+                .filter(SessionEvent.MessageAdded.class::isInstance)
+                .map(SessionEvent.MessageAdded.class::cast)
+                .filter(message -> message.role() == SessionEvent.Role.USER)
+                .map(SessionEvent.MessageAdded::content)
+                .findFirst()
+                .orElse(null);
     }
 
     private static ResponseStatusException conflict(String sessionId) {
@@ -375,4 +408,7 @@ public final class RunService {
 
     /** 发送给前端的运行中止原因。 */
     private record AbortedEvent(String reason) {}
+
+    /** 自动生成并已持久化的会话标题。 */
+    private record SessionTitleEvent(String title) {}
 }

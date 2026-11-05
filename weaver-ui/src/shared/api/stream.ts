@@ -63,6 +63,8 @@ export interface StreamHandlers {
   onInbox?: (entries: StreamInboxEntry[]) => void;
   /** 一条用户消息进入事件流；包含每轮首条与运行中注入的插话。 */
   onUserMessage?: (text: string) => void;
+  /** 会话标题生成完成。 */
+  onSessionTitle?: (title: string) => void;
   onAborted?: (reason: AbortReason) => void;
   onDone?: (reason: StopReason) => void;
   onError?: (message: string) => void;
@@ -143,6 +145,9 @@ function dispatchFrame(frame: string, handlers: StreamHandlers): void {
       break;
     case 'user_message':
       handlers.onUserMessage?.((JSON.parse(parsed.data) as { text: string }).text);
+      break;
+    case 'session_title':
+      handlers.onSessionTitle?.((JSON.parse(parsed.data) as { title: string }).title);
       break;
     case 'aborted':
       handlers.onAborted?.((JSON.parse(parsed.data) as { reason: AbortReason }).reason);

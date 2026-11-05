@@ -98,27 +98,31 @@
 
 /* ---------- 会话 ---------- */
 
-.session {
+.sessionRow {
   position: relative;
+}
+
+.session {
   display: grid;
   gap: 2px;
   width: 100%;
-  padding: 9px 10px;
+  padding: 9px 56px 9px 10px;
   border: 1px solid transparent;
   border-radius: var(--radius-md);
   text-align: left;
 }
 
-.session:hover {
+.sessionRow:hover .session,
+.sessionRow:focus-within .session {
   background: var(--panel-2);
 }
 
-.sessionActive {
+.sessionRowActive .session {
   background: var(--panel-2);
   border-color: var(--border);
 }
 
-.sessionActive::before {
+.sessionRowActive::before {
   content: '';
   position: absolute;
   left: 0;
@@ -137,6 +141,19 @@
   font-weight: 550;
 }
 
+.sessionRename {
+  min-width: 0;
+  width: 100%;
+  padding: 1px 4px;
+  border: 1px solid var(--accent-2);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+}
+
 .sessionMeta {
   font-size: 11px;
   color: var(--faint);
@@ -150,6 +167,54 @@
   height: 6px;
   border-radius: 50%;
   background: var(--accent);
+}
+
+.sessionActions {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 1;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transform: translateY(-1px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.sessionRow:hover .sessionActions,
+.sessionRow:focus-within .sessionActions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.sessionRow:hover .sessionDot,
+.sessionRow:focus-within .sessionDot {
+  opacity: 0;
+}
+
+.sessionAction {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.sessionAction:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.sessionActionConfirm {
+  border-color: var(--accent);
+  color: var(--text);
+  font-size: 10px;
 }
 
 /* ---------- 插件导航 ---------- */

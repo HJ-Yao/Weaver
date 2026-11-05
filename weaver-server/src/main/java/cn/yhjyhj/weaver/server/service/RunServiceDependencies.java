@@ -16,6 +16,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * @param sessions 会话元数据服务
  * @param eventStore 会话事件事实源
  * @param modelProvider 每轮解析当前模型的 provider
+ * @param titleGenerator 首轮后生成会话标题的辅助生成器
  * @param tools 工具注册表
  * @param approvalPolicy 工具审批策略
  * @param approvalGrants 会话审批授权记录
@@ -27,6 +28,7 @@ public record RunServiceDependencies(
         SessionService sessions,
         SessionEventStore eventStore,
         ModelClientProvider modelProvider,
+        SessionTitleGenerator titleGenerator,
         ToolRegistry tools,
         ApprovalPolicy approvalPolicy,
         ApprovalGrantStore approvalGrants,
@@ -38,6 +40,7 @@ public record RunServiceDependencies(
         sessions = Objects.requireNonNull(sessions, "sessions");
         eventStore = Objects.requireNonNull(eventStore, "eventStore");
         modelProvider = Objects.requireNonNull(modelProvider, "modelProvider");
+        titleGenerator = Objects.requireNonNull(titleGenerator, "titleGenerator");
         tools = Objects.requireNonNull(tools, "tools");
         approvalPolicy = Objects.requireNonNull(approvalPolicy, "approvalPolicy");
         approvalGrants = Objects.requireNonNull(approvalGrants, "approvalGrants");

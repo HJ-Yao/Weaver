@@ -5,7 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -88,6 +91,90 @@ class RunServiceTest {
         assertTrue(store.from(summary.id(), 0L).stream()
                 .map(StoredEvent::event)
                 .anyMatch(SessionEvent.RunFinished.class::isInstance));
+    }
+
+    @Test
+    void generatesTitleAfterFirstRunAndEmitsItOnTheCurrentStream() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        InMemorySessionStore metadata = new InMemorySessionStore();
+        metadata.create("session-unnamed", null, java.time.Instant.now());
+        SessionService sessions = new SessionService(metadata, store);
+        RecordingEmitter emitter = new RecordingEmitter();
+        SessionTitleGenerator titleGenerator = mock(SessionTitleGenerator.class);
+        when(titleGenerator.generate(any(), eq("hello"))).thenReturn("Echo 对话");
+        RunService service = new RunService(dependencies(
+                sessions,
+                store,
+                ModelClientProvider.fixed(new EchoModelClient()),
+                ToolRegistry.empty(),
+                300,
+                titleGenerator,
+                () -> emitter));
+
+        service.run("session-unnamed", "hello");
+
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(5)));
+        assertEquals("Echo 对话", sessions.find("session-unnamed").orElseThrow().title());
+        SentEvent titleEvent = emitter.sentEvents().stream()
+                .filter(event -> event.name().equals("session_title"))
+                .findFirst()
+                .orElseThrow();
+        Map<String, Object> payload = JSON.convertValue(
+                titleEvent.data(), new TypeReference<>() {});
+        assertEquals("Echo 对话", payload.get("title"));
+        verify(titleGenerator).generate(any(), eq("hello"));
+    }
+
+    @Test
+    void doesNotGenerateTitleWhenSessionAlreadyHasOne() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionSummary summary = sessions.create("Existing");
+        RecordingEmitter emitter = new RecordingEmitter();
+        SessionTitleGenerator titleGenerator = mock(SessionTitleGenerator.class);
+        RunService service = new RunService(dependencies(
+                sessions,
+                store,
+                ModelClientProvider.fixed(new EchoModelClient()),
+                ToolRegistry.empty(),
+                300,
+                titleGenerator,
+                () -> emitter));
+
+        service.run(summary.id(), "hello");
+
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(5)));
+        verify(titleGenerator, never()).generate(any(), any());
+        assertEquals("Existing", sessions.find(summary.id()).orElseThrow().title());
+    }
+
+    @Test
+    void titleGenerationFailureDoesNotPreventRunFinished() throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        InMemorySessionStore metadata = new InMemorySessionStore();
+        metadata.create("session-unnamed", null, java.time.Instant.now());
+        SessionService sessions = new SessionService(metadata, store);
+        RecordingEmitter emitter = new RecordingEmitter();
+        SessionTitleGenerator titleGenerator = mock(SessionTitleGenerator.class);
+        when(titleGenerator.generate(any(), any())).thenThrow(
+                new IllegalStateException("title model failed"));
+        RunService service = new RunService(dependencies(
+                sessions,
+                store,
+                ModelClientProvider.fixed(new EchoModelClient()),
+                ToolRegistry.empty(),
+                300,
+                titleGenerator,
+                () -> emitter));
+
+        service.run("session-unnamed", "hello");
+
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(5)));
+        assertNull(emitter.failure);
+        assertTrue(awaitRunFinished(store, "session-unnamed"));
+        assertNull(metadata.find("session-unnamed").orElseThrow().title());
+        assertTrue(emitter.sentEvents().stream()
+                .noneMatch(event -> event.name().equals("session_title")));
     }
 
     @Test
@@ -702,10 +789,29 @@ class RunServiceTest {
             ToolRegistry tools,
             int approvalTimeoutSeconds,
             Supplier<SseEmitter> emitterFactory) {
+        return dependencies(
+                sessions,
+                store,
+                modelProvider,
+                tools,
+                approvalTimeoutSeconds,
+                new SessionTitleGenerator(Duration.ofSeconds(1)),
+                emitterFactory);
+    }
+
+    private static RunServiceDependencies dependencies(
+            SessionService sessions,
+            SessionEventStore store,
+            ModelClientProvider modelProvider,
+            ToolRegistry tools,
+            int approvalTimeoutSeconds,
+            SessionTitleGenerator titleGenerator,
+            Supplier<SseEmitter> emitterFactory) {
         return new RunServiceDependencies(
                 sessions,
                 store,
                 modelProvider,
+                titleGenerator,
                 tools,
                 RuleBasedApprovalPolicy.defaults(),
                 ApprovalGrantStore.none(),

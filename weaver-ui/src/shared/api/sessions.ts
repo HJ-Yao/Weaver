@@ -99,11 +99,11 @@ export const sessionApi = {
   /** GET /sessions：供侧栏使用的元数据。 */
   list: () => request<SessionSummaryDto[]>('/sessions'),
 
-  /** POST /sessions：创建一个空会话。 */
-  create: (title: string) =>
+  /** POST /sessions：标题可省略，省略时由服务端在首轮后自动命名。 */
+  create: (title?: string) =>
     request<SessionSummaryDto>('/sessions', {
       method: 'POST',
-      body: JSON.stringify({ title }),
+      body: JSON.stringify(title ? { title } : {}),
     }),
 
   /** GET /sessions/{id}：元数据及回放快照。 */
@@ -119,6 +119,13 @@ export const sessionApi = {
   /** DELETE /sessions/{id}：删除会话。 */
   remove: (id: string) =>
     request<void>(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** PATCH /sessions/{id}：修改标题。 */
+  rename: (id: string, title: string) =>
+    request<SessionSummaryDto>(`/sessions/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    }),
 
   /** POST /sessions/{id}/approvals/{callId}：响应 SSE 审批请求。 */
   resolveApproval: (sessionId: string, callId: string, approved: boolean) =>
