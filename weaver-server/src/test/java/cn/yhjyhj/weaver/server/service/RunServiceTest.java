@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,6 +34,8 @@ import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import cn.yhjyhj.weaver.server.store.InMemorySessionStore;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -54,11 +57,41 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 class RunServiceTest {
 
     private static final ObjectMapper JSON = new ObjectMapper(); // 验证取消 SSE 的载荷字段
+    private static final Path DEFAULT_WORKSPACE =
+            Path.of("target", "run-service-default").toAbsolutePath().normalize();
+
+    @Test
+    void buildsToolsFromSessionWorkspaceAtRunStart(
+            @org.junit.jupiter.api.io.TempDir(
+                            factory = cn.yhjyhj.weaver.server.TestWorkspaceTempDirFactory.class)
+                    Path workspace)
+            throws Exception {
+        InMemorySessionEventStore store = new InMemorySessionEventStore();
+        SessionService sessions = new SessionService(
+                new InMemorySessionStore(), store, DEFAULT_WORKSPACE);
+        SessionSummary summary = sessions.create("Workspace tools");
+        assertTrue(sessions.updateWorkspace(summary.id(), workspace.toString()));
+        RecordingEmitter emitter = new RecordingEmitter();
+        ToolRegistryFactory factory = mock(ToolRegistryFactory.class);
+        when(factory.create(any())).thenReturn(ToolRegistry.empty());
+        RunService service = new RunService(factoryDependencies(
+                sessions,
+                store,
+                ModelClientProvider.fixed(new EchoModelClient()),
+                factory,
+                300,
+                () -> emitter));
+
+        service.run(summary.id(), "hello");
+
+        assertTrue(emitter.awaitCompletion(Duration.ofSeconds(5)));
+        verify(factory, timeout(5_000)).create(workspace.toRealPath());
+    }
 
     @Test
     void runsLoopOnVirtualThreadAndCompletesSseEmitter() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Echo");
         RecordingEmitter emitter = new RecordingEmitter();
         EchoModelClient echo = new EchoModelClient();
@@ -98,7 +131,7 @@ class RunServiceTest {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
         InMemorySessionStore metadata = new InMemorySessionStore();
         metadata.create("session-unnamed", null, java.time.Instant.now());
-        SessionService sessions = new SessionService(metadata, store);
+        SessionService sessions = new SessionService(metadata, store, DEFAULT_WORKSPACE);
         RecordingEmitter emitter = new RecordingEmitter();
         SessionTitleGenerator titleGenerator = mock(SessionTitleGenerator.class);
         when(titleGenerator.generate(any(), eq("hello"))).thenReturn("Echo 对话");
@@ -128,7 +161,7 @@ class RunServiceTest {
     @Test
     void doesNotGenerateTitleWhenSessionAlreadyHasOne() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Existing");
         RecordingEmitter emitter = new RecordingEmitter();
         SessionTitleGenerator titleGenerator = mock(SessionTitleGenerator.class);
@@ -153,7 +186,7 @@ class RunServiceTest {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
         InMemorySessionStore metadata = new InMemorySessionStore();
         metadata.create("session-unnamed", null, java.time.Instant.now());
-        SessionService sessions = new SessionService(metadata, store);
+        SessionService sessions = new SessionService(metadata, store, DEFAULT_WORKSPACE);
         RecordingEmitter emitter = new RecordingEmitter();
         SessionTitleGenerator titleGenerator = mock(SessionTitleGenerator.class);
         when(titleGenerator.generate(any(), any())).thenThrow(
@@ -182,8 +215,13 @@ class RunServiceTest {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
         SessionService sessions = mock(SessionService.class);
         SessionSummary summary =
-                new SessionSummary("session-1", "Touch", java.time.Instant.now());
+                new SessionSummary(
+                        "session-1",
+                        "Touch",
+                        java.time.Instant.now(),
+                        DEFAULT_WORKSPACE.toString());
         when(sessions.find(summary.id())).thenReturn(Optional.of(summary));
+        when(sessions.workspace(summary.id())).thenReturn(Optional.of(DEFAULT_WORKSPACE));
         RecordingEmitter emitter = new RecordingEmitter();
         RunService service = new RunService(dependencies(
                 sessions,
@@ -202,7 +240,7 @@ class RunServiceTest {
     @Test
     void reportsWhetherSessionHasActiveRun() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Running");
         RecordingEmitter emitter = new RecordingEmitter();
         CountDownLatch modelStarted = new CountDownLatch(1);
@@ -228,7 +266,7 @@ class RunServiceTest {
     @Test
     void rejectsUnknownSessionBeforeCreatingEmitter() {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         RunService service = new RunService(dependencies(
                 sessions,
                 store,
@@ -246,7 +284,7 @@ class RunServiceTest {
     @Test
     void resolvesApprovalForActiveGateAndContinuesRun() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Approval");
         RecordingEmitter emitter = new RecordingEmitter();
         RunService service = new RunService(dependencies(
@@ -277,7 +315,7 @@ class RunServiceTest {
     @Test
     void returnsFalseWhenResolvingForUnknownActiveGate() {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         RunService service = new RunService(dependencies(
                 sessions,
                 store,
@@ -291,7 +329,7 @@ class RunServiceTest {
     @Test
     void rejectsConcurrentRunForSameSession() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Concurrent");
         RecordingEmitter emitter = new RecordingEmitter();
         CountDownLatch modelStarted = new CountDownLatch(1);
@@ -330,7 +368,7 @@ class RunServiceTest {
     @Test
     void returnsFalseWhenCancellingWithoutActiveRun() {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         RunService service = new RunService(dependencies(
                 sessions,
                 store,
@@ -344,7 +382,7 @@ class RunServiceTest {
     @Test
     void enqueuesTurnInputAndProcessesItAsTheNextUserMessage() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Inbox turn");
         RecordingEmitter emitter = new RecordingEmitter();
         CountDownLatch modelStarted = new CountDownLatch(1);
@@ -382,7 +420,7 @@ class RunServiceTest {
     @Test
     void enqueuesStepInputIntoTheEventStreamBeforeTheNextStep() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Inbox step");
         RecordingEmitter emitter = new RecordingEmitter();
         CountDownLatch modelStarted = new CountDownLatch(1);
@@ -445,7 +483,7 @@ class RunServiceTest {
     @Test
     void pendingReflectsRemovedAndReplacedEntries() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Inbox edit");
         RecordingEmitter emitter = new RecordingEmitter();
         CountDownLatch modelStarted = new CountDownLatch(1);
@@ -485,7 +523,7 @@ class RunServiceTest {
     @Test
     void rejectsInboxMutationsWithoutActiveRunAndReturnsEmptyPendingList() {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Idle inbox");
         RunService service = new RunService(dependencies(
                 sessions,
@@ -512,7 +550,7 @@ class RunServiceTest {
     @Test
     void rejectsInboxDeliveryWhenInboxIsFull() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Full inbox");
         RecordingEmitter emitter = new RecordingEmitter();
         CountDownLatch modelStarted = new CountDownLatch(1);
@@ -547,7 +585,7 @@ class RunServiceTest {
     @Test
     void publishesInboxSnapshotAfterSuccessfulDelivery() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Inbox SSE");
         RecordingEmitter emitter = new RecordingEmitter();
         CountDownLatch modelStarted = new CountDownLatch(1);
@@ -586,7 +624,7 @@ class RunServiceTest {
     @Test
     void cancelsActiveRunAndEmitsAbortedEvent() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Cancel");
         RecordingEmitter emitter = new RecordingEmitter();
         CountDownLatch modelStarted = new CountDownLatch(1);
@@ -629,7 +667,7 @@ class RunServiceTest {
     @Test
     void cancelsNeverEndingModelStreamAndCompletesWithAbortedEvent() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Streaming cancel");
         RecordingEmitter emitter = new RecordingEmitter();
         CountDownLatch modelStarted = new CountDownLatch(1);
@@ -680,7 +718,7 @@ class RunServiceTest {
     @Test
     void doesNotEmitAbortedWhenTheLoopFailsInternally() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Failed");
         RecordingEmitter emitter = new RecordingEmitter();
         ModelClient failingModel = request -> {
@@ -704,7 +742,7 @@ class RunServiceTest {
     @Test
     void returnsFalseWhenCancellingAfterRunCompletes() throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Completed");
         RecordingEmitter emitter = new RecordingEmitter();
         RunService service = new RunService(dependencies(
@@ -740,7 +778,7 @@ class RunServiceTest {
     private static void assertSseTerminationDeniesPendingApproval(
             Consumer<RecordingEmitter> terminate) throws Exception {
         InMemorySessionEventStore store = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), store);
+        SessionService sessions = sessionService(store);
         SessionSummary summary = sessions.create("Disconnect");
         RecordingEmitter emitter = new RecordingEmitter();
         RunService service = new RunService(dependencies(
@@ -765,6 +803,10 @@ class RunServiceTest {
         assertEquals(
                 "denied by user-denied",
                 snapshot.toolCalls().getFirst().result().content());
+    }
+
+    private static SessionService sessionService(InMemorySessionEventStore store) {
+        return new SessionService(new InMemorySessionStore(), store, DEFAULT_WORKSPACE);
     }
 
     private static RunServiceDependencies dependencies(
@@ -807,12 +849,47 @@ class RunServiceTest {
             int approvalTimeoutSeconds,
             SessionTitleGenerator titleGenerator,
             Supplier<SseEmitter> emitterFactory) {
+        return factoryDependencies(
+                sessions,
+                store,
+                modelProvider,
+                ignoredRoot -> tools,
+                approvalTimeoutSeconds,
+                titleGenerator,
+                emitterFactory);
+    }
+
+    private static RunServiceDependencies factoryDependencies(
+            SessionService sessions,
+            SessionEventStore store,
+            ModelClientProvider modelProvider,
+            ToolRegistryFactory factory,
+            int approvalTimeoutSeconds,
+            Supplier<SseEmitter> emitterFactory) {
+        return factoryDependencies(
+                sessions,
+                store,
+                modelProvider,
+                factory,
+                approvalTimeoutSeconds,
+                new SessionTitleGenerator(Duration.ofSeconds(1)),
+                emitterFactory);
+    }
+
+    private static RunServiceDependencies factoryDependencies(
+            SessionService sessions,
+            SessionEventStore store,
+            ModelClientProvider modelProvider,
+            ToolRegistryFactory factory,
+            int approvalTimeoutSeconds,
+            SessionTitleGenerator titleGenerator,
+            Supplier<SseEmitter> emitterFactory) {
         return new RunServiceDependencies(
                 sessions,
                 store,
                 modelProvider,
                 titleGenerator,
-                tools,
+                factory,
                 RuleBasedApprovalPolicy.defaults(),
                 ApprovalGrantStore.none(),
                 10,

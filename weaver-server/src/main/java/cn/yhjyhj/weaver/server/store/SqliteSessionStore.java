@@ -31,20 +31,21 @@ public final class SqliteSessionStore implements SessionStore, AutoCloseable {
                 id         TEXT PRIMARY KEY,
                 title      TEXT,
                 created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL
+                updated_at INTEGER NOT NULL,
+                workspace  TEXT
             )
             """;
 
     /** 按最近更新时间列出会话。 */
     private static final String SELECT_SESSIONS = """
-            SELECT id, title, created_at
+            SELECT id, title, created_at, workspace
             FROM sessions
             ORDER BY updated_at DESC, id
             """;
 
     /** 按标识读取单个会话。 */
     private static final String SELECT_SESSION =
-            "SELECT id, title, created_at FROM sessions WHERE id = ?";
+            "SELECT id, title, created_at, workspace FROM sessions WHERE id = ?";
 
     /** 写入新会话元数据。 */
     private static final String INSERT_SESSION = """
@@ -64,6 +65,13 @@ public final class SqliteSessionStore implements SessionStore, AutoCloseable {
             UPDATE sessions
             SET title = ?, updated_at = ?
             WHERE id = ? AND title IS NULL
+            """;
+
+    /** 修改会话工作目录并刷新更新时间。 */
+    private static final String UPDATE_WORKSPACE = """
+            UPDATE sessions
+            SET workspace = ?, updated_at = ?
+            WHERE id = ?
             """;
 
     /** 刷新最近更新时间。 */
@@ -105,6 +113,7 @@ public final class SqliteSessionStore implements SessionStore, AutoCloseable {
             opened = DriverManager.getConnection(jdbcUrl(databasePath));
             configure(opened);
             createSchema(opened);
+            ensureWorkspaceColumn(opened);
             this.connection = opened;
         } catch (IOException | SQLException exception) {
             closeAfterConstructionFailure(opened);
@@ -172,6 +181,25 @@ public final class SqliteSessionStore implements SessionStore, AutoCloseable {
         requireSessionId(id);
         requireTitle(title);
         return executeTitleUpdate(RENAME_SESSION, id, title);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public synchronized boolean updateWorkspace(String id, String workspace) {
+        ensureOpen();
+        requireSessionId(id);
+        if (workspace == null || workspace.isBlank()) {
+            throw new IllegalArgumentException("workspace must not be blank");
+        }
+
+        try (PreparedStatement statement = connection.prepareStatement(UPDATE_WORKSPACE)) {
+            statement.setString(1, workspace);
+            statement.setLong(2, System.currentTimeMillis());
+            statement.setString(3, id);
+            return statement.executeUpdate() > 0;
+        } catch (SQLException exception) {
+            throw new IllegalStateException("failed to update session workspace", exception);
+        }
     }
 
     /** {@inheritDoc} */
@@ -264,7 +292,8 @@ public final class SqliteSessionStore implements SessionStore, AutoCloseable {
         return new SessionSummary(
                 result.getString("id"),
                 result.getString("title"),
-                Instant.ofEpochMilli(result.getLong("created_at")));
+                Instant.ofEpochMilli(result.getLong("created_at")),
+                result.getString("workspace"));
     }
 
     private void ensureOpen() {
@@ -323,6 +352,24 @@ public final class SqliteSessionStore implements SessionStore, AutoCloseable {
     private static void createSchema(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.execute(CREATE_SESSIONS);
+        }
+    }
+
+    private static void ensureWorkspaceColumn(Connection connection) throws SQLException {
+        boolean hasWorkspace = false;
+        try (Statement statement = connection.createStatement();
+                ResultSet columns = statement.executeQuery("PRAGMA table_info(sessions)")) {
+            while (columns.next()) {
+                if ("workspace".equalsIgnoreCase(columns.getString("name"))) {
+                    hasWorkspace = true;
+                    break;
+                }
+            }
+        }
+        if (!hasWorkspace) {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("ALTER TABLE sessions ADD COLUMN workspace TEXT");
+            }
         }
     }
 

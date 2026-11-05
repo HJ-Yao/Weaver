@@ -25,6 +25,9 @@ public interface SessionStore {
     /** 修改标题；会话不存在时返回 false。 */
     boolean rename(String id, String title);
 
+    /** 更新会话工作目录；不存在时返回 false。 */
+    boolean updateWorkspace(String id, String workspace);
+
     /** 仅在标题为空时写入；用于自动命名，不覆盖用户手动改名。 */
     boolean renameIfUnnamed(String id, String title);
 

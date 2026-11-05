@@ -7,6 +7,9 @@ import cn.yhjyhj.weaver.core.events.SessionSnapshot;
 import cn.yhjyhj.weaver.core.events.StoredEvent;
 import cn.yhjyhj.weaver.server.api.dto.SessionSummary;
 import cn.yhjyhj.weaver.server.store.SessionStore;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -24,16 +27,22 @@ public class SessionService {
 
     private final SessionStore sessions; // 持久化会话元数据
     private final SessionEventStore events; // 会话事件事实源
+    private final Path defaultWorkspace; // 会话未覆盖工作目录时使用的进程默认值
 
     /**
      * 创建会话服务。
      *
      * @param sessions 会话元数据存储
      * @param events 会话事件事实源
+     * @param defaultWorkspace 会话未设置工作目录时使用的默认目录
      */
-    public SessionService(SessionStore sessions, SessionEventStore events) {
+    public SessionService(
+            SessionStore sessions, SessionEventStore events, Path defaultWorkspace) {
         this.sessions = Objects.requireNonNull(sessions, "sessions");
         this.events = Objects.requireNonNull(events, "events");
+        this.defaultWorkspace = Objects.requireNonNull(defaultWorkspace, "defaultWorkspace")
+                .toAbsolutePath()
+                .normalize();
     }
 
     /**
@@ -45,8 +54,8 @@ public class SessionService {
     public SessionSummary create(String title) {
         String storedTitle = title == null || title.isBlank() ? null : title;
         Instant createdAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
-        SessionSummary summary =
-                new SessionSummary(UUID.randomUUID().toString(), storedTitle, createdAt);
+        SessionSummary summary = new SessionSummary(
+                UUID.randomUUID().toString(), storedTitle, createdAt, null);
         sessions.create(summary.id(), storedTitle, createdAt);
         return displaySummary(summary);
     }
@@ -58,7 +67,7 @@ public class SessionService {
      */
     public List<SessionSummary> list() {
         return sessions.list().stream()
-                .map(SessionService::displaySummary)
+                .map(this::displaySummary)
                 .toList();
     }
 
@@ -69,7 +78,18 @@ public class SessionService {
      * @return 存在时返回会话元数据，否则为空
      */
     public Optional<SessionSummary> find(String id) {
-        return sessions.find(id).map(SessionService::displaySummary);
+        return sessions.find(id).map(this::displaySummary);
+    }
+
+    /**
+     * 返回会话生效的工作目录；会话不存在时返回空。
+     *
+     * @param id 会话标识
+     * @return 存储覆盖值或默认工作区的绝对路径
+     */
+    public Optional<Path> workspace(String id) {
+        return sessions.find(id)
+                .map(summary -> Path.of(effectiveWorkspace(summary)));
     }
 
     /**
@@ -112,6 +132,25 @@ public class SessionService {
             throw new IllegalArgumentException("title must not be blank");
         }
         return sessions.rename(id, title);
+    }
+
+    /**
+     * 更新会话工作目录；路径必须存在且是目录。
+     *
+     * <p>落库值取 {@link Path#toRealPath()}，因此会消解 {@code ..} 与符号链接，
+     * 并保存为规范化绝对路径。会话不存在时返回 false。
+     *
+     * @param id 会话标识
+     * @param rawPath 用户提供的目录路径
+     * @return 会话存在并完成更新时为 true
+     * @throws IllegalArgumentException 路径为空、不存在、不是目录或无法解析时抛出
+     */
+    public boolean updateWorkspace(String id, String rawPath) {
+        if (sessions.find(id).isEmpty()) {
+            return false;
+        }
+        Path resolved = resolveWorkspace(rawPath);
+        return sessions.updateWorkspace(id, resolved.toString());
     }
 
     /**
@@ -189,10 +228,33 @@ public class SessionService {
         return events.from(id, 0L);
     }
 
-    private static SessionSummary displaySummary(SessionSummary summary) {
-        if (summary.title() != null) {
+    private SessionSummary displaySummary(SessionSummary summary) {
+        String title = summary.title() == null ? DEFAULT_TITLE : summary.title();
+        String workspace = effectiveWorkspace(summary);
+        if (title.equals(summary.title()) && workspace.equals(summary.workspace())) {
             return summary;
         }
-        return new SessionSummary(summary.id(), DEFAULT_TITLE, summary.createdAt());
+        return new SessionSummary(summary.id(), title, summary.createdAt(), workspace);
+    }
+
+    private String effectiveWorkspace(SessionSummary summary) {
+        return summary.workspace() == null
+                ? defaultWorkspace.toString()
+                : summary.workspace();
+    }
+
+    private static Path resolveWorkspace(String rawPath) {
+        if (rawPath == null || rawPath.isBlank()) {
+            throw new IllegalArgumentException("workspace must not be blank");
+        }
+        Path candidate = Path.of(rawPath).toAbsolutePath().normalize();
+        if (!Files.exists(candidate) || !Files.isDirectory(candidate)) {
+            throw new IllegalArgumentException("workspace must be an existing directory");
+        }
+        try {
+            return candidate.toRealPath();
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("workspace is not accessible", exception);
+        }
     }
 }

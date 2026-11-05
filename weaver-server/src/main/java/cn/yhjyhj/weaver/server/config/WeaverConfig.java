@@ -13,6 +13,7 @@ import cn.yhjyhj.weaver.server.service.RunService;
 import cn.yhjyhj.weaver.server.service.RunServiceDependencies;
 import cn.yhjyhj.weaver.server.service.SessionService;
 import cn.yhjyhj.weaver.server.service.SessionTitleGenerator;
+import cn.yhjyhj.weaver.server.service.ToolRegistryFactory;
 import cn.yhjyhj.weaver.server.settings.DefaultModelClientProvider;
 import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import cn.yhjyhj.weaver.server.settings.ModelSettingsService;
@@ -24,6 +25,7 @@ import cn.yhjyhj.weaver.server.workspace.WorkspaceDiffService;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -40,6 +42,17 @@ public class WeaverConfig {
     @Bean(destroyMethod = "close")
     public SessionEventStore eventStore(WeaverProperties properties) {
         return new SqliteEventStore(properties.storePath());
+    }
+
+    /**
+     * 暴露控制器可注入的默认工作区路径。
+     *
+     * @param properties Weaver 运行配置
+     * @return 配置中的默认工作区
+     */
+    @Bean(name = "weaverDefaultWorkspace")
+    public Path weaverDefaultWorkspace(WeaverProperties properties) {
+        return properties.workspace();
     }
 
     /**
@@ -61,8 +74,10 @@ public class WeaverConfig {
      * @return 已完成 backfill 的单例会话服务
      */
     @Bean
-    public SessionService sessionService(SessionStore store, SessionEventStore events) {
-        SessionService service = new SessionService(store, events);
+    public SessionService sessionService(
+            SessionStore store, SessionEventStore events, WeaverProperties properties) {
+        SessionService service =
+                new SessionService(store, events, properties.workspace());
         service.backfill();
         return service;
     }
@@ -74,9 +89,8 @@ public class WeaverConfig {
      * @return 包含 file、shell、git 的工具注册表
      */
     @Bean
-    public ToolRegistry toolRegistry(WeaverProperties properties) {
-        Path root = properties.workspace();
-        return new ToolRegistry(List.of(
+    public ToolRegistryFactory toolRegistryFactory() {
+        return root -> new ToolRegistry(List.of(
                 new FileTool(root),
                 new ShellTool(root),
                 new GitTool(root)));
@@ -89,8 +103,8 @@ public class WeaverConfig {
      * @return 绑定到配置工作区的 diff 服务
      */
     @Bean
-    public WorkspaceDiffService workspaceDiffService(WeaverProperties properties) {
-        return new WorkspaceDiffService(properties.workspace());
+    public WorkspaceDiffService workspaceDiffService() {
+        return new WorkspaceDiffService();
     }
 
     /**
@@ -174,7 +188,7 @@ public class WeaverConfig {
      * @param eventStore 会话事件事实源
      * @param modelProvider 每轮解析当前模型的 provider
      * @param titleGenerator 首轮后生成会话标题的辅助生成器
-     * @param tools 工具注册表
+     * @param toolRegistryFactory 按会话工作区构建工具注册表的工厂
      * @param approvalPolicy 工具审批策略
      * @param approvalGrants 会话审批授权记录
      * @param properties Weaver 运行配置
@@ -186,7 +200,7 @@ public class WeaverConfig {
             SessionEventStore eventStore,
             ModelClientProvider modelProvider,
             SessionTitleGenerator titleGenerator,
-            ToolRegistry tools,
+            ToolRegistryFactory toolRegistryFactory,
             ApprovalPolicy approvalPolicy,
             ApprovalGrantStore approvalGrants,
             WeaverProperties properties) {
@@ -195,7 +209,7 @@ public class WeaverConfig {
                 eventStore,
                 modelProvider,
                 titleGenerator,
-                tools,
+                toolRegistryFactory,
                 approvalPolicy,
                 approvalGrants,
                 properties.maxSteps(),

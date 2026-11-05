@@ -10,6 +10,9 @@ import cn.yhjyhj.weaver.core.events.InMemorySessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.server.api.dto.SessionSummary;
 import cn.yhjyhj.weaver.server.store.SessionStore;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
@@ -24,6 +27,9 @@ import org.junit.jupiter.api.Test;
 
 class SessionServiceTest {
 
+    private static final Path DEFAULT_WORKSPACE =
+            Path.of("target", "default-workspace").toAbsolutePath().normalize();
+
     private InMemorySessionEventStore store; // 被测服务使用的事实源
     private InMemorySessionStore sessions; // 被测服务使用的元数据存储替身
     private SessionService service; // 会话元数据与快照服务
@@ -32,7 +38,7 @@ class SessionServiceTest {
     void setUp() {
         store = new InMemorySessionEventStore();
         sessions = new InMemorySessionStore();
-        service = new SessionService(sessions, store);
+        service = new SessionService(sessions, store, DEFAULT_WORKSPACE);
     }
 
     @Test
@@ -74,6 +80,64 @@ class SessionServiceTest {
     @Test
     void returnsEmptyWhenSessionDoesNotExist() {
         assertTrue(service.find("missing").isEmpty());
+        assertTrue(service.workspace("missing").isEmpty());
+    }
+
+    @Test
+    void returnsDefaultWorkspaceWhenSessionHasNoOverride() {
+        SessionSummary created = service.create("Default workspace");
+
+        assertEquals(DEFAULT_WORKSPACE, service.workspace(created.id()).orElseThrow());
+        assertEquals(
+                DEFAULT_WORKSPACE.toString(),
+                service.find(created.id()).orElseThrow().workspace());
+        assertNull(sessions.find(created.id()).orElseThrow().workspace());
+    }
+
+    @Test
+    void updatesWorkspaceToNormalizedRealPath(
+            @org.junit.jupiter.api.io.TempDir(
+                            factory = cn.yhjyhj.weaver.server.TestWorkspaceTempDirFactory.class)
+                    Path temp)
+            throws IOException {
+        SessionSummary created = service.create("Workspace override");
+        Path selected = Files.createDirectory(temp.resolve("selected"));
+        String rawPath = temp.resolve("ignored").resolve("..").resolve("selected").toString();
+
+        assertTrue(service.updateWorkspace(created.id(), rawPath));
+
+        Path realPath = selected.toRealPath();
+        assertEquals(realPath, service.workspace(created.id()).orElseThrow());
+        assertEquals(realPath.toString(), sessions.find(created.id()).orElseThrow().workspace());
+        assertEquals(realPath.toString(), service.find(created.id()).orElseThrow().workspace());
+    }
+
+    @Test
+    void rejectsMissingWorkspaceAndRegularFile(
+            @org.junit.jupiter.api.io.TempDir(
+                            factory = cn.yhjyhj.weaver.server.TestWorkspaceTempDirFactory.class)
+                    Path temp)
+            throws IOException {
+        SessionSummary created = service.create("Invalid workspace");
+        Path file = Files.createFile(temp.resolve("file.txt"));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.updateWorkspace(created.id(), temp.resolve("missing").toString()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.updateWorkspace(created.id(), file.toString()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.updateWorkspace(created.id(), "   "));
+    }
+
+    @Test
+    void reportsFalseWhenUpdatingWorkspaceForUnknownSession(
+            @org.junit.jupiter.api.io.TempDir(
+                            factory = cn.yhjyhj.weaver.server.TestWorkspaceTempDirFactory.class)
+                    Path temp) {
+        assertFalse(service.updateWorkspace("missing", temp.toString()));
     }
 
     @Test
@@ -264,7 +328,7 @@ final class InMemorySessionStore implements SessionStore {
 
     @Override
     public synchronized void create(String id, String title, Instant createdAt) {
-        sessions.put(id, new StoredSession(title, createdAt, createdAt));
+        sessions.put(id, new StoredSession(title, createdAt, createdAt, null));
     }
 
     @Override
@@ -293,7 +357,8 @@ final class InMemorySessionStore implements SessionStore {
         if (stored == null) {
             return false;
         }
-        sessions.put(id, new StoredSession(title, stored.createdAt(), Instant.now()));
+        sessions.put(id, new StoredSession(
+                title, stored.createdAt(), Instant.now(), stored.workspace()));
         return true;
     }
 
@@ -303,7 +368,19 @@ final class InMemorySessionStore implements SessionStore {
         if (stored == null || stored.title() != null) {
             return false;
         }
-        sessions.put(id, new StoredSession(title, stored.createdAt(), Instant.now()));
+        sessions.put(id, new StoredSession(
+                title, stored.createdAt(), Instant.now(), stored.workspace()));
+        return true;
+    }
+
+    @Override
+    public synchronized boolean updateWorkspace(String id, String workspace) {
+        StoredSession stored = sessions.get(id);
+        if (stored == null) {
+            return false;
+        }
+        sessions.put(id, new StoredSession(
+                stored.title(), stored.createdAt(), Instant.now(), workspace));
         return true;
     }
 
@@ -312,7 +389,7 @@ final class InMemorySessionStore implements SessionStore {
         StoredSession stored = sessions.get(id);
         if (stored != null) {
             sessions.put(id, new StoredSession(
-                    stored.title(), stored.createdAt(), Instant.now()));
+                    stored.title(), stored.createdAt(), Instant.now(), stored.workspace()));
         }
     }
 
@@ -331,10 +408,10 @@ final class InMemorySessionStore implements SessionStore {
     }
 
     private record StoredSession(
-            String title, Instant createdAt, Instant updatedAt) {
+            String title, Instant createdAt, Instant updatedAt, String workspace) {
 
         private SessionSummary summary(String id) {
-            return new SessionSummary(id, title, createdAt);
+            return new SessionSummary(id, title, createdAt, workspace);
         }
     }
 }

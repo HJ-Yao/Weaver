@@ -5,11 +5,11 @@ import cn.yhjyhj.weaver.server.api.dto.CreateSessionRequest;
 import cn.yhjyhj.weaver.server.api.dto.InboxContentRequest;
 import cn.yhjyhj.weaver.server.api.dto.InboxEntryView;
 import cn.yhjyhj.weaver.server.api.dto.InboxRequest;
-import cn.yhjyhj.weaver.server.api.dto.RenameSessionRequest;
 import cn.yhjyhj.weaver.server.api.dto.SendMessageRequest;
 import cn.yhjyhj.weaver.server.api.dto.SessionDetail;
 import cn.yhjyhj.weaver.server.api.dto.SessionEventView;
 import cn.yhjyhj.weaver.server.api.dto.SessionSummary;
+import cn.yhjyhj.weaver.server.api.dto.UpdateSessionRequest;
 import cn.yhjyhj.weaver.server.service.RunService;
 import cn.yhjyhj.weaver.server.service.SessionService;
 import jakarta.validation.Valid;
@@ -105,10 +105,27 @@ public class SessionController {
      * @throws ResponseStatusException 会话不存在时返回 404
      */
     @PatchMapping("/{id}")
-    public SessionSummary rename(
+    public SessionSummary update(
             @PathVariable("id") String id,
-            @Valid @RequestBody RenameSessionRequest request) {
-        if (!sessions.rename(id, request.title())) {
+            @Valid @RequestBody UpdateSessionRequest request) {
+        boolean hasTitle = request.title() != null && !request.title().isBlank();
+        boolean hasWorkspace = request.workspace() != null;
+        if (!hasTitle && (request.workspace() == null || request.workspace().isBlank())) {
+            throw badRequest("at least one of title or workspace must be non-blank");
+        }
+        if (sessions.find(id).isEmpty()) {
+            throw notFound(id);
+        }
+        if (hasWorkspace) {
+            try {
+                if (!sessions.updateWorkspace(id, request.workspace())) {
+                    throw notFound(id);
+                }
+            } catch (IllegalArgumentException error) {
+                throw badRequest(error.getMessage());
+            }
+        }
+        if (hasTitle && !sessions.rename(id, request.title())) {
             throw notFound(id);
         }
         return requireSession(id);
@@ -284,5 +301,9 @@ public class SessionController {
     private static ResponseStatusException inboxEntryNotFound(String entryId) {
         return new ResponseStatusException(
                 HttpStatus.NOT_FOUND, "inbox entry not found: " + entryId);
+    }
+
+    private static ResponseStatusException badRequest(String reason) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, reason);
     }
 }

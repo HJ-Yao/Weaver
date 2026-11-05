@@ -14,6 +14,7 @@ import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import cn.yhjyhj.weaver.server.sse.SseApprovalGate;
 import cn.yhjyhj.weaver.server.sse.SseChannel;
 import cn.yhjyhj.weaver.server.sse.SseStreamSink;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +36,7 @@ public final class RunService {
     private final SessionEventStore eventStore; // 运行事实源
     private final ModelClientProvider modelProvider; // 每轮解析当前模型的入口
     private final SessionTitleGenerator titleGenerator; // 首轮后生成会话标题
-    private final ToolRegistry tools; // 进程级工具注册表
+    private final ToolRegistryFactory toolRegistryFactory; // 按会话工作区构建工具
     private final ApprovalPolicy approvalPolicy; // 工具审批策略
     private final ApprovalGrantStore approvalGrants; // 会话审批授权记录
     private final int maxSteps; // 单轮运行的最大步数
@@ -56,7 +57,7 @@ public final class RunService {
         this.eventStore = validatedDependencies.eventStore();
         this.modelProvider = validatedDependencies.modelProvider();
         this.titleGenerator = validatedDependencies.titleGenerator();
-        this.tools = validatedDependencies.tools();
+        this.toolRegistryFactory = validatedDependencies.toolRegistryFactory();
         this.approvalPolicy = validatedDependencies.approvalPolicy();
         this.approvalGrants = validatedDependencies.approvalGrants();
         this.maxSteps = validatedDependencies.maxSteps();
@@ -272,6 +273,10 @@ public final class RunService {
             ActiveRun activeRun) {
         SseStreamSink streamSink = channel.streamSink();
         ModelClient model = modelProvider.current();
+        Path root = sessions.workspace(sessionId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "session workspace not found: " + sessionId));
+        ToolRegistry tools = toolRegistryFactory.create(root);
         RunLoop loop = new RunLoop(
                 model,
                 channel.withToolResultRelay(eventStore),

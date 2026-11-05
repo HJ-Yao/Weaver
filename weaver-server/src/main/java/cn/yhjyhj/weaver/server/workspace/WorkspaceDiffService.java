@@ -11,34 +11,26 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 在配置的工作区中读取当前未提交改动。
+ * 在指定工作区中读取当前未提交改动。
  *
- * <p>服务只执行只读的 {@code git diff}；命令输出会先整体收取，再交给解析器裁剪。
+ * <p>服务只执行只读的 {@code git diff}；命令输出会先整体收集，再交给解析器截断。
  */
 public final class WorkspaceDiffService {
 
     private static final long TIMEOUT_SECONDS = 10; // git diff 的最长等待时间
     private static final int ERROR_SUMMARY_LIMIT = 500; // 错误输出摘要上限
 
-    private final Path workspace; // 执行 git 命令的工作区
     private final UnifiedDiffParser parser = new UnifiedDiffParser(); // 无状态 diff 解析器
-
-    /**
-     * 创建工作区改动读取服务。
-     *
-     * @param workspace 执行 git 命令的工作区路径
-     */
-    public WorkspaceDiffService(Path workspace) {
-        this.workspace = Objects.requireNonNull(workspace, "workspace");
-    }
 
     /**
      * 读取并解析工作区的未提交改动。
      *
+     * @param workspace 本次读取的工作区根目录
      * @return 当前未提交改动的结构化快照
      * @throws IllegalStateException git 无法启动、超时或返回非零退出码时抛出
      */
-    public WorkspaceDiff diff() {
+    public WorkspaceDiff diff(Path workspace) {
+        Objects.requireNonNull(workspace, "workspace");
         Process process;
         try {
             process = new ProcessBuilder(
@@ -51,13 +43,15 @@ public final class WorkspaceDiffService {
                     .redirectErrorStream(true)
                     .start();
         } catch (IOException error) {
-            throw new IllegalStateException("failed to start git diff: " + error.getMessage(), error);
+            throw new IllegalStateException(
+                    "failed to start git diff: " + error.getMessage(), error);
         }
 
-        // 独立线程持续消费输出，避免大 diff 填满管道后与 waitFor 互相阻塞。
+        // 独立线程持续消费输出，避免大 diff 填满管道后与 waitFor 相互阻塞。
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         AtomicReference<IOException> readFailure = new AtomicReference<>();
-        Thread reader = Thread.startVirtualThread(() -> readOutput(process, output, readFailure));
+        Thread reader = Thread.startVirtualThread(
+                () -> readOutput(process, output, readFailure));
 
         try {
             if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
@@ -77,7 +71,8 @@ public final class WorkspaceDiffService {
             IOException outputError = readFailure.get();
             if (outputError != null) {
                 throw new IllegalStateException(
-                        "failed to read git diff output: " + outputError.getMessage(), outputError);
+                        "failed to read git diff output: " + outputError.getMessage(),
+                        outputError);
             }
 
             String combinedOutput = readCapturedOutput(output);
@@ -104,7 +99,7 @@ public final class WorkspaceDiffService {
             byte[] buffer = new byte[8_192];
             int count;
             while ((count = input.read(buffer)) != -1) {
-                // 超时后主线程会读取已捕获摘要，因此每次写入保持原子可见。
+                // 超时后主线程会读取已捕获摘要，因此每次写入保持原子可视。
                 synchronized (output) {
                     output.write(buffer, 0, count);
                 }

@@ -38,7 +38,7 @@ class SessionControllerTest {
 
     private static final Instant CREATED_AT = Instant.parse("2026-10-28T08:00:00Z"); // 稳定响应时间
     private static final SessionSummary SUMMARY =
-            new SessionSummary("session-1", "Planning", CREATED_AT); // 固定会话响应
+            new SessionSummary("session-1", "Planning", CREATED_AT, "C:\\workspace"); // 固定会话响应
 
     @Autowired
     private MockMvc mockMvc; // HTTP 行为入口
@@ -66,7 +66,8 @@ class SessionControllerTest {
     @Test
     void createsSessionWithoutTitleAndReturnsDisplayFallback() throws Exception {
         when(sessionService.create(null))
-                .thenReturn(new SessionSummary("session-unnamed", "新会话", CREATED_AT));
+                .thenReturn(new SessionSummary(
+                        "session-unnamed", "新会话", CREATED_AT, "C:\\workspace"));
 
         mockMvc.perform(post("/api/sessions")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -229,8 +230,9 @@ class SessionControllerTest {
     }
 
     @Test
-    void renamesSessionAndReturnsUpdatedSummary() throws Exception {
-        SessionSummary renamed = new SessionSummary("session-1", "Renamed", CREATED_AT);
+    void updatesOnlyTitleAndReturnsUpdatedSummary() throws Exception {
+        SessionSummary renamed =
+                new SessionSummary("session-1", "Renamed", CREATED_AT, "C:\\workspace");
         when(sessionService.rename("session-1", "Renamed")).thenReturn(true);
         when(sessionService.find("session-1")).thenReturn(Optional.of(renamed));
 
@@ -240,6 +242,63 @@ class SessionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("session-1"))
                 .andExpect(jsonPath("$.title").value("Renamed"));
+    }
+
+    @Test
+    void updatesOnlyWorkspaceAndReturnsUpdatedSummary() throws Exception {
+        SessionSummary updated = new SessionSummary(
+                "session-1", "Planning", CREATED_AT, "C:\\updated");
+        when(sessionService.updateWorkspace("session-1", "C:\\updated")).thenReturn(true);
+        when(sessionService.find("session-1")).thenReturn(Optional.of(updated));
+
+        mockMvc.perform(patch("/api/sessions/session-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workspace\":\"C:\\\\updated\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.workspace").value("C:\\updated"));
+
+        verify(sessionService, never()).rename("session-1", "Planning");
+    }
+
+    @Test
+    void updatesTitleAndWorkspaceTogether() throws Exception {
+        SessionSummary updated = new SessionSummary(
+                "session-1", "Renamed", CREATED_AT, "C:\\updated");
+        when(sessionService.rename("session-1", "Renamed")).thenReturn(true);
+        when(sessionService.updateWorkspace("session-1", "C:\\updated")).thenReturn(true);
+        when(sessionService.find("session-1")).thenReturn(Optional.of(updated));
+
+        mockMvc.perform(patch("/api/sessions/session-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Renamed\",\"workspace\":\"C:\\\\updated\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Renamed"))
+                .andExpect(jsonPath("$.workspace").value("C:\\updated"));
+    }
+
+    @Test
+    void rejectsIllegalWorkspaceWithBadRequest() throws Exception {
+        when(sessionService.find("session-1")).thenReturn(Optional.of(SUMMARY));
+        when(sessionService.updateWorkspace("session-1", "C:\\missing"))
+                .thenThrow(new IllegalArgumentException("workspace must be an existing directory"));
+
+        mockMvc.perform(patch("/api/sessions/session-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workspace\":\"C:\\\\missing\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsPatchWithoutNonBlankFields() throws Exception {
+        mockMvc.perform(patch("/api/sessions/session-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(patch("/api/sessions/session-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\" \",\"workspace\":\" \"}"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -257,6 +316,16 @@ class SessionControllerTest {
         mockMvc.perform(patch("/api/sessions/missing")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"title\":\"Renamed\"}"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void returnsNotFoundWhenUpdatingWorkspaceOfUnknownSession() throws Exception {
+        when(sessionService.updateWorkspace("missing", "C:\\updated")).thenReturn(false);
+
+        mockMvc.perform(patch("/api/sessions/missing")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workspace\":\"C:\\\\updated\"}"))
                 .andExpect(status().isNotFound());
     }
 

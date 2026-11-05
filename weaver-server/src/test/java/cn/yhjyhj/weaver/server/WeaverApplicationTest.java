@@ -14,6 +14,7 @@ import cn.yhjyhj.weaver.server.api.SessionController;
 import cn.yhjyhj.weaver.server.config.WeaverProperties;
 import cn.yhjyhj.weaver.server.service.RunService;
 import cn.yhjyhj.weaver.server.service.SessionService;
+import cn.yhjyhj.weaver.server.service.ToolRegistryFactory;
 import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import cn.yhjyhj.weaver.server.settings.ModelSettingsService;
 import cn.yhjyhj.weaver.server.store.SessionStore;
@@ -63,7 +64,7 @@ class WeaverApplicationTest {
 
         assertTrue(context.getBean(SessionEventStore.class) instanceof SqliteEventStore);
         assertTrue(context.getBean(SessionStore.class) instanceof SqliteSessionStore);
-        ToolRegistry tools = context.getBean(ToolRegistry.class);
+        ToolRegistry tools = context.getBean(ToolRegistryFactory.class).create(workspace);
         assertEquals(
                 java.util.List.of("file", "git", "shell"),
                 tools.specs().stream().map(spec -> spec.name()).toList());

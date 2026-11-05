@@ -13,6 +13,7 @@ import cn.yhjyhj.weaver.core.model.ModelClient;
 import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import cn.yhjyhj.weaver.server.store.InMemorySessionStore;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
@@ -20,10 +21,14 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class RunServiceDependenciesTest {
 
+    private static final Path DEFAULT_WORKSPACE =
+            Path.of("target", "dependency-default").toAbsolutePath().normalize();
+
     @Test
     void rejectsNonPositiveMaxSteps() {
         InMemorySessionEventStore eventStore = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), eventStore);
+        SessionService sessions =
+                new SessionService(new InMemorySessionStore(), eventStore, DEFAULT_WORKSPACE);
 
         assertAll(
                 () -> assertThrows(
@@ -37,7 +42,8 @@ class RunServiceDependenciesTest {
     @Test
     void rejectsNegativeApprovalTimeout() {
         InMemorySessionEventStore eventStore = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), eventStore);
+        SessionService sessions =
+                new SessionService(new InMemorySessionStore(), eventStore, DEFAULT_WORKSPACE);
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -47,14 +53,15 @@ class RunServiceDependenciesTest {
     @Test
     void rejectsNullCollaborators() {
         InMemorySessionEventStore eventStore = new InMemorySessionEventStore();
-        SessionService sessions = new SessionService(new InMemorySessionStore(), eventStore);
+        SessionService sessions =
+                new SessionService(new InMemorySessionStore(), eventStore, DEFAULT_WORKSPACE);
         ModelClient model = request -> {
             throw new UnsupportedOperationException();
         };
         ModelClientProvider modelProvider = ModelClientProvider.fixed(model);
         SessionTitleGenerator titleGenerator =
                 new SessionTitleGenerator(Duration.ofSeconds(1));
-        ToolRegistry tools = ToolRegistry.empty();
+        ToolRegistryFactory tools = root -> ToolRegistry.empty();
         ApprovalPolicy approvalPolicy = RuleBasedApprovalPolicy.defaults();
         ApprovalGrantStore approvalGrants = ApprovalGrantStore.none();
         Supplier<SseEmitter> emitterFactory =
@@ -197,7 +204,7 @@ class RunServiceDependenciesTest {
                     throw new UnsupportedOperationException();
                 }),
                 new SessionTitleGenerator(Duration.ofSeconds(1)),
-                ToolRegistry.empty(),
+                root -> ToolRegistry.empty(),
                 RuleBasedApprovalPolicy.defaults(),
                 ApprovalGrantStore.none(),
                 maxSteps,

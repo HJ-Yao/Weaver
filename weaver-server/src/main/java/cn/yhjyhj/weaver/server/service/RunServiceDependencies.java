@@ -3,7 +3,6 @@ package cn.yhjyhj.weaver.server.service;
 import cn.yhjyhj.weaver.core.approval.ApprovalGrantStore;
 import cn.yhjyhj.weaver.core.approval.ApprovalPolicy;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
-import cn.yhjyhj.weaver.core.tool.ToolRegistry;
 import cn.yhjyhj.weaver.server.settings.ModelClientProvider;
 import java.time.Duration;
 import java.util.Objects;
@@ -17,7 +16,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * @param eventStore 会话事件事实源
  * @param modelProvider 每轮解析当前模型的 provider
  * @param titleGenerator 首轮后生成会话标题的辅助生成器
- * @param tools 工具注册表
+ * @param toolRegistryFactory 按会话工作区构建工具注册表的工厂
  * @param approvalPolicy 工具审批策略
  * @param approvalGrants 会话审批授权记录
  * @param maxSteps 单轮运行最大步数
@@ -29,19 +28,21 @@ public record RunServiceDependencies(
         SessionEventStore eventStore,
         ModelClientProvider modelProvider,
         SessionTitleGenerator titleGenerator,
-        ToolRegistry tools,
+        ToolRegistryFactory toolRegistryFactory,
         ApprovalPolicy approvalPolicy,
         ApprovalGrantStore approvalGrants,
         int maxSteps,
         Duration approvalTimeout,
         Supplier<SseEmitter> emitterFactory) {
 
+    /** 校验必要协作者与运行参数范围。 */
     public RunServiceDependencies {
         sessions = Objects.requireNonNull(sessions, "sessions");
         eventStore = Objects.requireNonNull(eventStore, "eventStore");
         modelProvider = Objects.requireNonNull(modelProvider, "modelProvider");
         titleGenerator = Objects.requireNonNull(titleGenerator, "titleGenerator");
-        tools = Objects.requireNonNull(tools, "tools");
+        toolRegistryFactory = Objects.requireNonNull(
+                toolRegistryFactory, "toolRegistryFactory");
         approvalPolicy = Objects.requireNonNull(approvalPolicy, "approvalPolicy");
         approvalGrants = Objects.requireNonNull(approvalGrants, "approvalGrants");
         if (maxSteps <= 0) {

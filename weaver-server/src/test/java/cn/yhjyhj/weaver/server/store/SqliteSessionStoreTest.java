@@ -9,7 +9,12 @@ import static org.mockito.Mockito.when;
 
 import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.server.api.dto.SessionSummary;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -36,9 +41,50 @@ class SqliteSessionStoreTest {
             store.create("session-1", "Planning", createdAt);
 
             SessionSummary expected =
-                    new SessionSummary("session-1", "Planning", createdAt);
+                    new SessionSummary("session-1", "Planning", createdAt, null);
             assertEquals(expected, store.find("session-1").orElseThrow());
             assertEquals(List.of(expected), store.list());
+        }
+    }
+
+    @Test
+    void createsWorkspaceColumnInNewDatabase() throws Exception {
+        Path database = tempDirectory.resolve("workspace-column.db");
+
+        try (SqliteSessionStore store = new SqliteSessionStore(database)) {
+            assertTrue(hasColumn(database, "sessions", "workspace"));
+        }
+    }
+
+    @Test
+    void migratesLegacySessionsTableWithoutWorkspaceColumn() throws Exception {
+        Path database = tempDirectory.resolve("legacy.db");
+        Instant createdAt = Instant.parse("2026-10-01T08:00:00Z");
+        Files.createDirectories(tempDirectory);
+        try (Connection connection = DriverManager.getConnection(sqliteUrl(database));
+                Statement statement = connection.createStatement()) {
+            statement.execute("""
+                    CREATE TABLE sessions (
+                        id         TEXT PRIMARY KEY,
+                        title      TEXT,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL
+                    )
+                    """);
+            statement.execute(
+                    "INSERT INTO sessions (id, title, created_at, updated_at) VALUES "
+                            + "('legacy', 'Legacy row', "
+                            + createdAt.toEpochMilli()
+                            + ", "
+                            + createdAt.toEpochMilli()
+                            + ")");
+        }
+
+        try (SqliteSessionStore store = new SqliteSessionStore(database)) {
+            assertTrue(hasColumn(database, "sessions", "workspace"));
+            assertEquals(
+                    new SessionSummary("legacy", "Legacy row", createdAt, null),
+                    store.find("legacy").orElseThrow());
         }
     }
 
@@ -70,6 +116,26 @@ class SqliteSessionStoreTest {
             assertTrue(store.rename("session-1", "After"));
             assertEquals("After", store.find("session-1").orElseThrow().title());
             assertFalse(store.rename("missing", "After"));
+        }
+    }
+
+    @Test
+    void updatesWorkspaceAndRefreshesUpdatedAt() throws Exception {
+        Path database = tempDirectory.resolve("workspace-update.db");
+        Instant createdAt = Instant.parse("2026-10-01T08:00:00Z");
+
+        try (SqliteSessionStore store = new SqliteSessionStore(database)) {
+            store.create("session-1", "Workspace", createdAt);
+            Instant oldUpdatedAt = readUpdatedAt(database, "session-1");
+
+            assertTrue(store.updateWorkspace("session-1", "C:\\work"));
+            assertFalse(store.updateWorkspace("missing", "C:\\work"));
+            assertEquals(
+                    "C:\\work",
+                    store.find("session-1").orElseThrow().workspace());
+            assertTrue(
+                    readUpdatedAt(database, "session-1").toEpochMilli()
+                            > oldUpdatedAt.toEpochMilli());
         }
     }
 
@@ -148,5 +214,37 @@ class SqliteSessionStoreTest {
 
     private static List<String> ids(List<SessionSummary> sessions) {
         return sessions.stream().map(SessionSummary::id).toList();
+    }
+
+    private static boolean hasColumn(Path database, String table, String column)
+            throws Exception {
+        try (Connection connection = DriverManager.getConnection(sqliteUrl(database));
+                Statement statement = connection.createStatement();
+                ResultSet result = statement.executeQuery("PRAGMA table_info(" + table + ")")) {
+            while (result.next()) {
+                if (column.equalsIgnoreCase(result.getString("name"))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    private static Instant readUpdatedAt(Path database, String id) throws Exception {
+        try (Connection connection = DriverManager.getConnection(sqliteUrl(database));
+                var statement = connection.prepareStatement(
+                        "SELECT updated_at FROM sessions WHERE id = ?")) {
+            statement.setString(1, id);
+            try (ResultSet result = statement.executeQuery()) {
+                assertTrue(result.next());
+                return Instant.ofEpochMilli(result.getLong("updated_at"));
+            }
+        }
+    }
+
+    private static String sqliteUrl(Path database) {
+        return "jdbc:sqlite:" + database.toAbsolutePath().normalize()
+                .toString()
+                .replace('\\', '/');
     }
 }

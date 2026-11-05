@@ -21,7 +21,7 @@ public final class InMemorySessionStore implements SessionStore {
 
     @Override
     public synchronized void create(String id, String title, Instant createdAt) {
-        sessions.put(id, new Stored(title, createdAt, createdAt));
+        sessions.put(id, new Stored(title, createdAt, createdAt, null));
     }
 
     @Override
@@ -48,7 +48,8 @@ public final class InMemorySessionStore implements SessionStore {
         if (stored == null) {
             return false;
         }
-        sessions.put(id, new Stored(title, stored.createdAt(), Instant.now()));
+        sessions.put(id, new Stored(
+                title, stored.createdAt(), Instant.now(), stored.workspace()));
         return true;
     }
 
@@ -58,7 +59,19 @@ public final class InMemorySessionStore implements SessionStore {
         if (stored == null || stored.title() != null) {
             return false;
         }
-        sessions.put(id, new Stored(title, stored.createdAt(), Instant.now()));
+        sessions.put(id, new Stored(
+                title, stored.createdAt(), Instant.now(), stored.workspace()));
+        return true;
+    }
+
+    @Override
+    public synchronized boolean updateWorkspace(String id, String workspace) {
+        Stored stored = sessions.get(id);
+        if (stored == null) {
+            return false;
+        }
+        sessions.put(id, new Stored(
+                stored.title(), stored.createdAt(), Instant.now(), workspace));
         return true;
     }
 
@@ -66,7 +79,8 @@ public final class InMemorySessionStore implements SessionStore {
     public synchronized void touch(String id) {
         Stored stored = sessions.get(id);
         if (stored != null) {
-            sessions.put(id, new Stored(stored.title(), stored.createdAt(), Instant.now()));
+            sessions.put(id, new Stored(
+                    stored.title(), stored.createdAt(), Instant.now(), stored.workspace()));
         }
     }
 
@@ -81,10 +95,11 @@ public final class InMemorySessionStore implements SessionStore {
     }
 
     /** 单条会话元数据。 */
-    private record Stored(String title, Instant createdAt, Instant updatedAt) {
+    private record Stored(
+            String title, Instant createdAt, Instant updatedAt, String workspace) {
 
         private SessionSummary summary(String id) {
-            return new SessionSummary(id, title, createdAt);
+            return new SessionSummary(id, title, createdAt, workspace);
         }
     }
 }
