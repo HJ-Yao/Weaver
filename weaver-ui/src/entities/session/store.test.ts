@@ -16,7 +16,7 @@ vi.mock('@/shared/api/sessions', () => ({
     list: vi.fn(),
     create: vi.fn(),
     detail: vi.fn(),
-    rename: vi.fn(),
+    update: vi.fn(),
     remove: vi.fn(),
     deleteTurn: vi.fn(),
     resolveApproval: vi.fn(),
@@ -51,12 +51,14 @@ const firstSession: SessionSummaryDto = {
   id: 'session-1',
   title: 'First',
   createdAt: '2026-10-31T10:00:00Z',
+  workspace: 'F:\\workspace\\first',
 };
 
 const secondSession: SessionSummaryDto = {
   id: 'session-2',
   title: 'Second',
   createdAt: '2026-10-31T11:00:00Z',
+  workspace: 'F:\\workspace\\second',
 };
 
 function detailFor(summary: SessionSummaryDto, content = ''): SessionDetailDto {
@@ -169,6 +171,7 @@ describe('useSessionStore', () => {
       id: 'session-created',
       title: 'Created',
       createdAt: '2026-10-31T12:00:00Z',
+      workspace: 'F:\\workspace',
     };
     mockedSessionApi.create.mockResolvedValue(createdSession);
 
@@ -181,17 +184,68 @@ describe('useSessionStore', () => {
     expect(state.transcript).toEqual([]);
   });
 
-  it('renames a session in place after the server accepts it', async () => {
+  it('updates a session title in place after the server accepts it', async () => {
     const renamed = { ...firstSession, title: 'Renamed' };
-    mockedSessionApi.rename.mockResolvedValue(renamed);
+    mockedSessionApi.update.mockResolvedValue(renamed);
     useSessionStore.setState({ sessions: [firstSession, secondSession] });
 
     await expect(
       useSessionStore.getState().renameSession(firstSession.id, 'Renamed'),
     ).resolves.toBe(true);
 
-    expect(mockedSessionApi.rename).toHaveBeenCalledWith(firstSession.id, 'Renamed');
+    expect(mockedSessionApi.update).toHaveBeenCalledWith(firstSession.id, { title: 'Renamed' });
     expect(useSessionStore.getState().sessions).toEqual([renamed, secondSession]);
+  });
+
+  it('creates a session before setting the first workspace', async () => {
+    const createdSession: SessionSummaryDto = {
+      id: 'session-created',
+      title: 'Created',
+      createdAt: '2026-10-31T12:00:00Z',
+      workspace: 'F:\\workspace',
+    };
+    const updatedSession = { ...createdSession, workspace: 'F:\\workspace\\selected' };
+    mockedSessionApi.create.mockResolvedValue(createdSession);
+    mockedSessionApi.update.mockResolvedValue(updatedSession);
+
+    await expect(useSessionStore.getState().setWorkspace('F:\\workspace\\selected')).resolves.toBe(
+      true,
+    );
+
+    expect(mockedSessionApi.create).toHaveBeenCalledWith();
+    expect(mockedSessionApi.update).toHaveBeenCalledWith(createdSession.id, {
+      workspace: 'F:\\workspace\\selected',
+    });
+    expect(mockedSessionApi.create.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedSessionApi.update.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('updates the workspace of the active session in the list', async () => {
+    const updated = { ...firstSession, workspace: 'F:\\workspace\\selected' };
+    mockedSessionApi.update.mockResolvedValue(updated);
+    useSessionStore.setState({
+      sessions: [firstSession, secondSession],
+      activeSessionId: firstSession.id,
+    });
+
+    await expect(useSessionStore.getState().setWorkspace('F:\\workspace\\selected')).resolves.toBe(
+      true,
+    );
+
+    expect(useSessionStore.getState().sessions).toEqual([updated, secondSession]);
+  });
+
+  it('returns false and preserves the list when setting a workspace fails', async () => {
+    mockedSessionApi.update.mockRejectedValue(new Error('not a directory'));
+    useSessionStore.setState({
+      sessions: [firstSession, secondSession],
+      activeSessionId: firstSession.id,
+    });
+
+    await expect(useSessionStore.getState().setWorkspace('F:\\missing')).resolves.toBe(false);
+
+    expect(useSessionStore.getState().sessions).toEqual([firstSession, secondSession]);
   });
 
   it('deletes the current session and selects the next one', async () => {
@@ -244,9 +298,7 @@ describe('useSessionStore', () => {
     useSessionStore.setState({
       sessions: [firstSession],
       activeSessionId: firstSession.id,
-      transcript: transcriptFromSnapshot(
-        detailFor(firstSession, 'deleted transcript').snapshot,
-      ),
+      transcript: transcriptFromSnapshot(detailFor(firstSession, 'deleted transcript').snapshot),
       running: false,
     });
 
@@ -314,6 +366,7 @@ describe('useSessionStore', () => {
       id: 'session-first-message',
       title: '新会话',
       createdAt: '2026-10-31T12:30:00Z',
+      workspace: 'F:\\workspace',
     };
     let resolveCreate: (session: SessionSummaryDto) => void = () => undefined;
     mockedSessionApi.create.mockReturnValue(

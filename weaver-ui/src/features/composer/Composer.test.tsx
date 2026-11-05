@@ -5,8 +5,16 @@ import { useUiStore } from '@/app/ui-store';
 import { useSessionStore } from '@/entities/session/store';
 import type { ServerStatusDto } from '@/shared/api/status';
 import { useServerStatusStore } from '@/app/server-status-store';
+import { workspaceApi } from '@/shared/api/workspace';
 import { Composer } from './Composer';
 
+vi.mock('@/shared/api/workspace', () => ({
+  workspaceApi: {
+    browse: vi.fn(),
+  },
+}));
+
+const mockedWorkspaceApi = vi.mocked(workspaceApi);
 const originalSessionState = useSessionStore.getState(); // 测试后恢复真实 action
 const originalUiState = useUiStore.getState();
 
@@ -23,9 +31,12 @@ const connectedStatus: ServerStatusDto = {
 
 beforeEach(() => {
   useSessionStore.setState({
+    sessions: [],
+    activeSessionId: null,
     running: false,
     pending: [],
     sendMessage: originalSessionState.sendMessage,
+    setWorkspace: originalSessionState.setWorkspace,
     cancelRun: originalSessionState.cancelRun,
     enqueueMessage: originalSessionState.enqueueMessage,
     removePending: originalSessionState.removePending,
@@ -33,13 +44,30 @@ beforeEach(() => {
   });
   useServerStatusStore.setState({ phase: 'connecting', status: null, error: null });
   useUiStore.setState({ showToast: originalUiState.showToast, toast: null });
+  mockedWorkspaceApi.browse.mockReset();
+  mockedWorkspaceApi.browse
+    .mockResolvedValueOnce({
+      path: 'F:\\workspace',
+      parent: 'F:\\',
+      directories: [{ name: 'selected', path: 'F:\\workspace\\selected' }],
+      roots: ['F:\\'],
+    })
+    .mockResolvedValue({
+      path: 'F:\\workspace\\selected',
+      parent: 'F:\\workspace',
+      directories: [],
+      roots: ['F:\\'],
+    });
 });
 
 afterEach(() => {
   useSessionStore.setState({
+    sessions: [],
+    activeSessionId: null,
     running: false,
     pending: [],
     sendMessage: originalSessionState.sendMessage,
+    setWorkspace: originalSessionState.setWorkspace,
     cancelRun: originalSessionState.cancelRun,
     enqueueMessage: originalSessionState.enqueueMessage,
     removePending: originalSessionState.removePending,
@@ -56,6 +84,77 @@ describe('Composer', () => {
 
     expect(screen.getByText('deepseek-chat')).toHaveAttribute('title', 'openai-chat-completions');
     expect(container.textContent).not.toMatch(/Claude|GPT/i);
+  });
+
+  it('opens the workspace picker and saves the selected directory when idle', async () => {
+    const user = userEvent.setup();
+    const setWorkspace = vi.fn().mockResolvedValue(true);
+    useSessionStore.setState({
+      sessions: [
+        {
+          id: 'session-1',
+          title: 'Session',
+          createdAt: '2026-11-05T10:00:00Z',
+          workspace: 'F:\\workspace',
+        },
+      ],
+      activeSessionId: 'session-1',
+      setWorkspace,
+    });
+    render(<Composer />);
+
+    await user.click(screen.getByRole('button', { name: '选择工作目录' }));
+    const dialog = await screen.findByRole('dialog', { name: '选择工作目录' });
+    await user.click(await within(dialog).findByRole('button', { name: 'selected' }));
+    await within(dialog).findByText('F:\\workspace\\selected');
+    await user.click(within(dialog).getByRole('button', { name: '选择此文件夹' }));
+
+    expect(setWorkspace).toHaveBeenCalledWith('F:\\workspace\\selected');
+  });
+
+  it('disables workspace changes while a run is active', () => {
+    useSessionStore.setState({ running: true });
+    render(<Composer />);
+
+    const button = screen.getByRole('button', { name: '选择工作目录' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', '运行中不能切换工作目录');
+  });
+
+  it('shows a toast when saving the selected workspace fails', async () => {
+    const user = userEvent.setup();
+    const setWorkspace = vi.fn().mockResolvedValue(false);
+    const showToast = vi.fn();
+    useSessionStore.setState({
+      sessions: [
+        {
+          id: 'session-1',
+          title: 'Session',
+          createdAt: '2026-11-05T10:00:00Z',
+          workspace: 'F:\\workspace',
+        },
+      ],
+      activeSessionId: 'session-1',
+      setWorkspace,
+    });
+    useUiStore.setState({ showToast });
+    render(<Composer />);
+
+    await user.click(screen.getByRole('button', { name: '选择工作目录' }));
+    const dialog = await screen.findByRole('dialog', { name: '选择工作目录' });
+    await user.click(await within(dialog).findByRole('button', { name: 'selected' }));
+    await within(dialog).findByText('F:\\workspace\\selected');
+    await user.click(within(dialog).getByRole('button', { name: '选择此文件夹' }));
+
+    expect(showToast).toHaveBeenCalledWith('切换工作目录失败');
+  });
+
+  it('does not render the previously hard-coded workspaces', () => {
+    const { container } = render(<Composer />);
+
+    expect(container).not.toHaveTextContent('Weaver');
+    expect(container).not.toHaveTextContent('ai-agent-scaffold');
+    expect(container).not.toHaveTextContent('deepseek-harness-java');
   });
 
   it('shows an unavailable model marker while no status is connected', () => {

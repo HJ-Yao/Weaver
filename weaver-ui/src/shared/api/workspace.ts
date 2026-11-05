@@ -23,7 +23,34 @@ export interface WorkspaceDiffDto {
   truncated: boolean;
 }
 
+/** 一个可进入的子目录。 */
+export interface WorkspaceEntryDto {
+  name: string;
+  path: string;
+}
+
+/** 目录浏览结果。 */
+export interface WorkspaceDirectoryDto {
+  /** 当前目录的绝对路径。 */
+  path: string;
+  /** 上一级目录；已经在根时为 null。 */
+  parent: string | null;
+  /** 直接子目录，按名称排序。 */
+  directories: WorkspaceEntryDto[];
+  /** 文件系统根（Windows 盘符 / Unix 的 /）。 */
+  roots: string[];
+}
+
 export const workspaceApi = {
-  /** GET /workspace/diff：读取当前工作区的未提交改动。 */
-  diff: () => request<WorkspaceDiffDto>('/workspace/diff'),
+  /** GET /workspace/diff?sessionId=：读取该会话工作区的未提交改动。 */
+  diff: (sessionId?: string) =>
+    request<WorkspaceDiffDto>(
+      sessionId ? `/workspace/diff?sessionId=${encodeURIComponent(sessionId)}` : '/workspace/diff',
+    ),
+
+  /** GET /workspace/browse：列出目录的直接子目录；省略 path 时从用户主目录开始。 */
+  browse: (path?: string) =>
+    request<WorkspaceDirectoryDto>(
+      path ? `/workspace/browse?path=${encodeURIComponent(path)}` : '/workspace/browse',
+    ),
 };

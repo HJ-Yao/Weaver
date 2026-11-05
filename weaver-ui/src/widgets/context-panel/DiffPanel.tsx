@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useUiStore } from '@/app/ui-store';
 import type { DiffFile } from '@/entities/diff/model';
+import { useSessionStore } from '@/entities/session/store';
 import { workspaceApi } from '@/shared/api/workspace';
 import styles from './ContextPanel.module.css';
 
@@ -15,6 +16,7 @@ type DiffStatus = 'loading' | 'ready' | 'error';
  */
 export function DiffPanel() {
   const openDiffViewer = useUiStore((state) => state.openDiffViewer);
+  const activeSessionId = useSessionStore((state) => state.activeSessionId);
   const [files, setFiles] = useState<DiffFile[]>([]);
   const [status, setStatus] = useState<DiffStatus>('loading');
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +29,7 @@ export function DiffPanel() {
     setError(null);
 
     void workspaceApi
-      .diff()
+      .diff(activeSessionId ?? undefined)
       .then((result) => {
         if (cancelled) return;
         setFiles(result.files);
@@ -44,7 +46,7 @@ export function DiffPanel() {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey]);
+  }, [activeSessionId, reloadKey]);
 
   return (
     <>

@@ -48,6 +48,8 @@ interface SessionState {
   createSession: () => Promise<void>;
   /** 修改会话标题；成功返回 `true`。 */
   renameSession: (id: string, title: string) => Promise<boolean>;
+  /** 更新会话工作目录；成功返回 `true`。 */
+  setWorkspace: (path: string) => Promise<boolean>;
   /** 删除会话；删除当前会话时自动选择列表中的下一项。 */
   deleteSession: (id: string) => Promise<boolean>;
   /** 删除从指定序号开始的那一轮及之后；成功后重新加载当前会话。 */
@@ -330,10 +332,34 @@ export const useSessionStore = create<SessionState>()((set, get) => {
       if (!nextTitle) return false;
 
       try {
-        const updated = await sessionApi.rename(id, nextTitle);
+        const updated = await sessionApi.update(id, { title: nextTitle });
         set((state) => ({
           sessions: state.sessions.map((session) =>
             session.id === id ? { ...session, title: updated.title } : session,
+          ),
+        }));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
+    setWorkspace: async (path) => {
+      if (!path.trim()) return false;
+
+      let sessionId = get().activeSessionId;
+      if (!sessionId) {
+        await get().createSession();
+        sessionId = get().activeSessionId;
+        if (!sessionId) return false;
+      }
+
+      try {
+        const updated = await sessionApi.update(sessionId, { workspace: path });
+        // 只合并工作目录，保留列表项上前端维护的字段（如步骤数）。
+        set((state) => ({
+          sessions: state.sessions.map((session) =>
+            session.id === sessionId ? { ...session, workspace: updated.workspace } : session,
           ),
         }));
         return true;

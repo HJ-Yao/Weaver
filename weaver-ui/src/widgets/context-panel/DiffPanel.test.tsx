@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useUiStore } from '@/app/ui-store';
+import { useSessionStore } from '@/entities/session/store';
 import type { WorkspaceDiffDto } from '@/shared/api/workspace';
 import { DiffPanel } from './DiffPanel';
 
@@ -18,11 +19,22 @@ vi.mock('@/shared/api/workspace', () => ({
 beforeEach(() => {
   diffMock.mockReset();
   useUiStore.setState({ openDiff: null });
+  useSessionStore.setState({
+    sessions: [],
+    activeSessionId: null,
+    transcript: [],
+    pending: [],
+    lastSeq: 0,
+    running: false,
+    status: 'idle',
+    error: null,
+  });
 });
 
 describe('DiffPanel', () => {
   it('renders files returned by the workspace API and opens the viewer on click', async () => {
     const user = userEvent.setup();
+    useSessionStore.setState({ activeSessionId: 'session-1' });
     diffMock.mockResolvedValue({
       truncated: false,
       files: [
@@ -39,7 +51,7 @@ describe('DiffPanel', () => {
     const fileButton = await screen.findByRole('button', { name: /src\/App\.tsx/ });
     await user.click(fileButton);
 
-    expect(diffMock).toHaveBeenCalledTimes(1);
+    expect(diffMock).toHaveBeenCalledWith('session-1');
     expect(useUiStore.getState().openDiff?.path).toBe('src/App.tsx');
   });
 
@@ -70,5 +82,17 @@ describe('DiffPanel', () => {
     render(<DiffPanel />);
 
     expect(await screen.findByText('工作区没有未提交改动')).toBeInTheDocument();
+  });
+
+  it('reloads the diff with the session id when the active session changes', async () => {
+    diffMock.mockResolvedValue({ files: [], truncated: false });
+    useSessionStore.setState({ activeSessionId: 'session-1' });
+    render(<DiffPanel />);
+
+    await vi.waitFor(() => expect(diffMock).toHaveBeenCalledWith('session-1'));
+
+    useSessionStore.setState({ activeSessionId: 'session-2' });
+
+    await vi.waitFor(() => expect(diffMock).toHaveBeenCalledWith('session-2'));
   });
 });

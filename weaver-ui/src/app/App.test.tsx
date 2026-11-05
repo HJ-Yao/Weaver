@@ -59,6 +59,7 @@ const loadedSession: SessionSummaryDto = {
   id: 'session-live',
   title: '真实会话',
   createdAt: '2026-11-02T08:00:00Z',
+  workspace: 'F:\\workspace',
 };
 
 const loadedDetail: SessionDetailDto = {

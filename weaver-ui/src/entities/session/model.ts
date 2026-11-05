@@ -14,6 +14,8 @@ export interface SessionSummary {
   title: string;
   /** ISO-8601 时间戳；由 `shared/lib/format` 格式化后显示。 */
   createdAt: string;
+  /** 会话生效的工作目录绝对路径。 */
+  workspace: string;
   /** 服务端报告时记录的已完成 Agent 步骤数。 */
   stepCount?: number;
 }

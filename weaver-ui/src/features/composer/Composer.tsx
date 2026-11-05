@@ -3,28 +3,10 @@ import { useServerStatusStore } from '@/app/server-status-store';
 import { useUiStore } from '@/app/ui-store';
 import { useSessionStore } from '@/entities/session/store';
 import type { InboxTargetDto } from '@/shared/api/sessions';
-import { Dropdown, type DropdownOption } from '@/shared/ui/Dropdown';
 import { Icon } from '@/shared/ui/Icon';
+import { WorkspacePicker } from '@/features/workspace-picker/WorkspacePicker';
 import styles from './Composer.module.css';
 import { QueuedMessages } from './QueuedMessages';
-
-/**
- * TODO(M2): 这些目录项应来自服务端（工作区注册表和 `~/.weaver/config.json`）。
- * 当前硬编码仅为在这些接口就绪前保持外壳可用。
- */
-const WORKSPACES: DropdownOption[] = [
-  { id: 'weaver', label: 'Weaver', meta: 'F:\\Back-End\\Project\\PrivateProjects\\Weaver' },
-  {
-    id: 'ai-agent-scaffold',
-    label: 'ai-agent-scaffold',
-    meta: 'F:\\Back-End\\Project\\PrivateProjects\\AI-Agent-Scaffold-self\\ai-agent-scaffold',
-  },
-  {
-    id: 'deepseek-harness-java',
-    label: 'deepseek-harness-java',
-    meta: 'F:\\Back-End\\Project\\PrivateProjects\\DeepSeek-Harness-Java\\deepseek-harness-java',
-  },
-];
 
 /**
  * 消息输入区。
@@ -39,15 +21,19 @@ export function Composer() {
   const editPending = useSessionStore((state) => state.editPending);
   const pending = useSessionStore((state) => state.pending);
   const cancelRun = useSessionStore((state) => state.cancelRun);
+  const setWorkspace = useSessionStore((state) => state.setWorkspace);
   const running = useSessionStore((state) => state.running);
+  const activeSessionId = useSessionStore((state) => state.activeSessionId);
+  const sessions = useSessionStore((state) => state.sessions);
   const approvalMode = useUiStore((state) => state.approvalMode);
   const cycleApprovalMode = useUiStore((state) => state.cycleApprovalMode);
   const showToast = useUiStore((state) => state.showToast);
   const serverStatus = useServerStatusStore((state) => state.status);
 
   const [draft, setDraft] = useState('');
-  const [workspace, setWorkspace] = useState(WORKSPACES[0].id);
+  const [workspacePickerOpen, setWorkspacePickerOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const activeWorkspace = sessions.find((session) => session.id === activeSessionId)?.workspace;
 
   // 随内容增高，达到 CSS 最大高度后改为滚动。
   useEffect(() => {
@@ -92,16 +78,28 @@ export function Composer() {
     submit();
   };
 
+  const selectWorkspace = async (path: string) => {
+    setWorkspacePickerOpen(false);
+    if (!(await setWorkspace(path))) {
+      showToast('切换工作目录失败');
+    }
+  };
+
   return (
     <div className={styles.composer}>
       <div className={styles.tools}>
-        <Dropdown
-          label="选择工作区"
-          options={WORKSPACES}
-          value={workspace}
-          onChange={setWorkspace}
-          placement="up"
-        />
+        <button
+          type="button"
+          className={styles.workspaceButton}
+          aria-label="选择工作目录"
+          title={running ? '运行中不能切换工作目录' : activeWorkspace}
+          disabled={running}
+          onClick={() => setWorkspacePickerOpen(true)}
+        >
+          <Icon name="folder" size={13} />
+          <span className={styles.workspaceName}>{workspaceLabel(activeWorkspace)}</span>
+          <Icon name="chevron-down" size={11} />
+        </button>
         <span className={styles.spacer} />
 
         <button
@@ -188,6 +186,19 @@ export function Composer() {
           )}
         </span>
       </div>
+      <WorkspacePicker
+        open={workspacePickerOpen}
+        onSelect={(path) => void selectWorkspace(path)}
+        onClose={() => setWorkspacePickerOpen(false)}
+      />
     </div>
   );
+}
+
+/** 从服务端绝对路径中提取用于按钮展示的最后一段。 */
+function workspaceLabel(path: string | undefined): string {
+  if (!path) return '选择工作目录';
+  const withoutTrailingSeparators = path.replace(/[\\/]+$/, '');
+  if (!withoutTrailingSeparators) return path;
+  return withoutTrailingSeparators.split(/[\\/]/).at(-1) || path;
 }

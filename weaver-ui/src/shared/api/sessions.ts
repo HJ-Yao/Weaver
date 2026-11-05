@@ -15,6 +15,8 @@ export interface SessionSummaryDto {
   id: string;
   title: string;
   createdAt: string;
+  /** 生效的工作目录；未单独设置时服务端返回默认工作区。 */
+  workspace: string;
 }
 
 /** `cn.yhjyhj.weaver.core.events.SessionSnapshot.Message` */
@@ -124,16 +126,15 @@ export const sessionApi = {
 
   /** DELETE /sessions/{id}/turns/{seq}：撤回该用户轮及之后的消息。 */
   deleteTurn: (sessionId: string, seq: number) =>
-    request<void>(
-      `/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(seq)}`,
-      { method: 'DELETE' },
-    ),
+    request<void>(`/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(seq)}`, {
+      method: 'DELETE',
+    }),
 
-  /** PATCH /sessions/{id}：修改标题。 */
-  rename: (id: string, title: string) =>
+  /** PATCH /sessions/{id}：修改标题和/或工作目录。 */
+  update: (id: string, changes: { title?: string; workspace?: string }) =>
     request<SessionSummaryDto>(`/sessions/${encodeURIComponent(id)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ title }),
+      body: JSON.stringify(changes),
     }),
 
   /** POST /sessions/{id}/approvals/{callId}：响应 SSE 审批请求。 */

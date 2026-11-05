@@ -10,11 +10,13 @@ const sessions: SessionSummary[] = [
     id: 'session-1',
     title: 'First',
     createdAt: '2026-10-31T10:00:00Z',
+    workspace: 'F:\\workspace',
   },
   {
     id: 'session-2',
     title: 'Second',
     createdAt: '2026-10-31T11:00:00Z',
+    workspace: 'F:\\workspace',
   },
 ];
 

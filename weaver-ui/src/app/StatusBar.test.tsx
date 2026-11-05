@@ -45,6 +45,7 @@ const summary: SessionSummaryDto = {
   id: 'session-1',
   title: 'Status test',
   createdAt: '2026-11-01T08:00:00Z',
+  workspace: 'F:\\workspace',
 };
 
 function detailWith(lastSeq: number, message = 'snapshot message'): SessionDetailDto {

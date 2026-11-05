@@ -1,0 +1,235 @@
+.dialog {
+  width: min(680px, calc(100vw - 32px));
+  max-height: min(640px, calc(100vh - 32px));
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.dialog::backdrop {
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+}
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  max-height: min(640px, calc(100vh - 32px));
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+
+.heading {
+  min-width: 0;
+  flex: 1;
+}
+
+.title {
+  margin: 0 0 var(--space-2);
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.path {
+  margin: 0;
+  overflow-x: auto;
+  color: var(--muted);
+  font: 11.5px/1.5 var(--font-mono);
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.closeButton {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  color: var(--faint);
+  font-size: 16px;
+}
+
+.closeButton:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.body {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  min-height: 300px;
+  overflow: hidden;
+}
+
+.roots {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border-right: 1px solid var(--border);
+  background: var(--panel-2);
+}
+
+.rootsLabel {
+  margin-bottom: var(--space-2);
+  color: var(--faint);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.root {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font: 11.5px/1.3 var(--font-mono);
+  text-align: left;
+}
+
+.root:hover:not(:disabled),
+.root[aria-current='true'] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.content {
+  min-width: 0;
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+.navigation {
+  display: flex;
+  margin-bottom: var(--space-3);
+}
+
+.parent {
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.parent:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.parent:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.directoryList {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.directory {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+}
+
+.directory > span:first-child {
+  color: var(--accent);
+}
+
+.directory:hover,
+.directory:focus-visible {
+  border-color: var(--border);
+  outline: none;
+  background: var(--panel-2);
+}
+
+.state,
+.error {
+  margin: var(--space-4) 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.error {
+  color: var(--red);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--border);
+}
+
+.secondaryButton,
+.primaryButton {
+  height: 32px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.secondaryButton {
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.secondaryButton:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.primaryButton {
+  background: var(--accent-2);
+  color: #fff;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: var(--accent);
+}
+
+.primaryButton:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+@media (max-width: 560px) {
+  .body {
+    grid-template-columns: 1fr;
+  }
+
+  .roots {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .rootsLabel {
+    width: 100%;
+  }
+}
