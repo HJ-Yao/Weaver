@@ -81,6 +81,7 @@ export function transcriptFromSnapshot(snapshot: SessionSnapshotDto): Transcript
       id: `snapshot-message-${index}`,
       role: message.role === 'USER' ? 'user' : 'assistant',
       content: message.content,
+      seq: message.seq,
     }));
 
   const tools: ToolCallItem[] = snapshot.toolCalls.map((call) => ({

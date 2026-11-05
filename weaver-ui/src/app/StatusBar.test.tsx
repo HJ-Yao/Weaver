@@ -51,7 +51,7 @@ function detailWith(lastSeq: number, message = 'snapshot message'): SessionDetai
   return {
     summary,
     snapshot: {
-      messages: [{ role: 'ASSISTANT', content: message }],
+      messages: [{ role: 'ASSISTANT', content: message, seq: 1 }],
       toolCalls: [],
       approvals: [],
       aborted: false,

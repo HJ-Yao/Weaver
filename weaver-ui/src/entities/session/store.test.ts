@@ -18,6 +18,7 @@ vi.mock('@/shared/api/sessions', () => ({
     detail: vi.fn(),
     rename: vi.fn(),
     remove: vi.fn(),
+    deleteTurn: vi.fn(),
     resolveApproval: vi.fn(),
     cancelRun: vi.fn(),
   },
@@ -63,7 +64,7 @@ function detailFor(summary: SessionSummaryDto, content = ''): SessionDetailDto {
     summary,
     snapshot: {
       ...emptySnapshot,
-      messages: content ? [{ role: 'ASSISTANT', content }] : [],
+      messages: content ? [{ role: 'ASSISTANT', content, seq: 1 }] : [],
     },
   };
 }
@@ -233,6 +234,59 @@ describe('useSessionStore', () => {
     expect(state.transcript).toEqual([]);
     expect(state.lastSeq).toBe(0);
     expect(state.pending).toEqual([]);
+  });
+
+  it('reloads the active session after deleting a turn', async () => {
+    const reloaded = detailFor(firstSession, 'remaining transcript');
+    reloaded.snapshot.lastSeq = 8;
+    mockedSessionApi.deleteTurn.mockResolvedValue(undefined);
+    mockedSessionApi.detail.mockResolvedValue(reloaded);
+    useSessionStore.setState({
+      sessions: [firstSession],
+      activeSessionId: firstSession.id,
+      transcript: transcriptFromSnapshot(
+        detailFor(firstSession, 'deleted transcript').snapshot,
+      ),
+      running: false,
+    });
+
+    await expect(useSessionStore.getState().deleteTurn(4)).resolves.toBe(true);
+
+    const state = useSessionStore.getState();
+    expect(mockedSessionApi.deleteTurn).toHaveBeenCalledWith(firstSession.id, 4);
+    expect(mockedSessionApi.detail).toHaveBeenCalledWith(firstSession.id);
+    expect(state.transcript).toEqual(transcriptFromSnapshot(reloaded.snapshot));
+    expect(state.lastSeq).toBe(8);
+  });
+
+  it('returns false without calling the API when no session is active', async () => {
+    useSessionStore.setState({ activeSessionId: null, running: false });
+
+    await expect(useSessionStore.getState().deleteTurn(4)).resolves.toBe(false);
+
+    expect(mockedSessionApi.deleteTurn).not.toHaveBeenCalled();
+  });
+
+  it('returns false without calling the API while a run is active', async () => {
+    useSessionStore.setState({ activeSessionId: firstSession.id, running: true });
+
+    await expect(useSessionStore.getState().deleteTurn(4)).resolves.toBe(false);
+
+    expect(mockedSessionApi.deleteTurn).not.toHaveBeenCalled();
+  });
+
+  it('returns false when deleting a turn fails', async () => {
+    mockedSessionApi.deleteTurn.mockRejectedValue(new Error('bad request'));
+    useSessionStore.setState({
+      activeSessionId: firstSession.id,
+      running: false,
+      transcript: [],
+    });
+
+    await expect(useSessionStore.getState().deleteTurn(4)).resolves.toBe(false);
+
+    expect(mockedSessionApi.detail).not.toHaveBeenCalled();
+    expect(useSessionStore.getState().transcript).toEqual([]);
   });
 
   it('updates the generated title on the matching session', () => {

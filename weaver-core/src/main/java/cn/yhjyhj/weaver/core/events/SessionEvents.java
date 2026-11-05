@@ -16,8 +16,36 @@ public final class SessionEvents {
 
     private SessionEvents() {}
 
+    /**
+     * 返回撤回过滤后的可见事件；每个 TurnDeleted 丢弃所有 seq >= fromSeq 的已可见事件。
+     *
+     * <p>过滤按事件顺序推进。撤回事件自身不进入结果，撤回后追加的新事件仍然可见，
+     * 因此会话可以在截断后继续对话。
+     *
+     * @param events 按 seq 升序排列的原始事件
+     * @return 不可变的可见事件列表
+     */
+    public static List<StoredEvent> visible(Iterable<StoredEvent> events) {
+        List<StoredEvent> visibleEvents = new ArrayList<>();
+        for (StoredEvent stored : events) {
+            if (stored.event() instanceof SessionEvent.TurnDeleted deleted) {
+                visibleEvents.removeIf(event -> event.seq() >= deleted.fromSeq());
+            } else {
+                visibleEvents.add(stored);
+            }
+        }
+        return List.copyOf(visibleEvents);
+    }
+
     /** 按事件顺序折叠；事件序号单调、可任意起止。 */
     public static SessionSnapshot replay(Iterable<StoredEvent> events) {
+        List<StoredEvent> originalEvents = new ArrayList<>();
+        long lastSeq = 0L;
+        for (StoredEvent stored : events) {
+            originalEvents.add(stored);
+            lastSeq = Math.max(lastSeq, stored.seq());
+        }
+
         List<SessionSnapshot.Message> messages = new ArrayList<>();
         List<SessionSnapshot.ToolCallRecord> toolCalls = new ArrayList<>();
         List<SessionSnapshot.ApprovalRecord> approvals = new ArrayList<>();
@@ -25,20 +53,22 @@ public final class SessionEvents {
         Map<String, SessionEvent.ApprovalRequested> pendingApprovalRequests =
                 new HashMap<>();
         boolean aborted = false;
-        long lastSeq = 0L;
 
-        for (StoredEvent stored : events) {
-            lastSeq = Math.max(lastSeq, stored.seq());
+        for (StoredEvent stored : visible(originalEvents)) {
             switch (stored.event()) {
                 case null -> {}
                 case SessionEvent.MessageAdded message ->
                         messages.add(new SessionSnapshot.Message(
-                                message.role(), message.content()));
+                                message.role(), message.content(), stored.seq()));
                 case SessionEvent.ToolCallStarted started ->
                         pendingToolCalls.put(started.callId(), started);
                 case SessionEvent.ToolCallCompleted completed ->
                         projectToolCompleted(
-                                completed, pendingToolCalls, toolCalls, messages);
+                                completed,
+                                stored.seq(),
+                                pendingToolCalls,
+                                toolCalls,
+                                messages);
                 case SessionEvent.ApprovalRequested requested ->
                         pendingApprovalRequests.put(requested.callId(), requested);
                 case SessionEvent.ApprovalResolved resolved ->
@@ -46,6 +76,7 @@ public final class SessionEvents {
                                 resolved, pendingApprovalRequests, approvals);
                 case SessionEvent.RunFinished finished ->
                         aborted = finished.aborted();
+                case SessionEvent.TurnDeleted ignored -> {}
             }
         }
         return new SessionSnapshot(
@@ -70,7 +101,7 @@ public final class SessionEvents {
         List<ModelMessage> history = new ArrayList<>();
         int assistantIndex = -1;
 
-        for (StoredEvent stored : events) {
+        for (StoredEvent stored : visible(events)) {
             switch (stored.event()) {
                 case null -> {}
                 case SessionEvent.MessageAdded message ->
@@ -84,6 +115,7 @@ public final class SessionEvents {
                 case SessionEvent.ApprovalRequested ignored -> {}
                 case SessionEvent.ApprovalResolved ignored -> {}
                 case SessionEvent.RunFinished ignored -> {}
+                case SessionEvent.TurnDeleted ignored -> {}
             }
         }
         return List.copyOf(history);
@@ -92,6 +124,7 @@ public final class SessionEvents {
     /** 把工具完成事件投影为调用记录与 tool 消息，并消费对应开始事件。 */
     private static void projectToolCompleted(
             SessionEvent.ToolCallCompleted completed,
+            long seq,
             Map<String, SessionEvent.ToolCallStarted> pendingToolCalls,
             List<SessionSnapshot.ToolCallRecord> toolCalls,
             List<SessionSnapshot.Message> messages) {
@@ -104,7 +137,7 @@ public final class SessionEvents {
                 completed.result()));
         // 工具结果也是下一轮模型可消费的事实，按完成顺序进入消息历史。
         messages.add(new SessionSnapshot.Message(
-                SessionEvent.Role.TOOL, completed.result().content()));
+                SessionEvent.Role.TOOL, completed.result().content(), seq));
     }
 
     /** 把审批结果投影为审计记录，并消费对应审批请求。 */

@@ -10,8 +10,14 @@ public record SessionSnapshot(
         boolean aborted,
         long lastSeq) {
 
-    /** 快照中的一条消息。 */
-    public record Message(SessionEvent.Role role, String content) {}
+    /**
+     * 快照中的一条消息。
+     *
+     * @param role 消息角色
+     * @param content 消息正文
+     * @param seq 消息在原始事件流中的序号；工具消息使用完成事件的序号
+     */
+    public record Message(SessionEvent.Role role, String content, long seq) {}
 
     /** 一次已完成的工具调用；argumentsJson 为模型原始传参，result 为结构化结果。 */
     public record ToolCallRecord(

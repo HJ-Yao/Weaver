@@ -90,7 +90,7 @@ class SessionControllerTest {
     void returnsSessionDetail() throws Exception {
         SessionSnapshot snapshot = new SessionSnapshot(
                 List.of(new SessionSnapshot.Message(
-                        cn.yhjyhj.weaver.core.events.SessionEvent.Role.USER, "hello")),
+                        cn.yhjyhj.weaver.core.events.SessionEvent.Role.USER, "hello", 5L)),
                 List.of(),
                 List.of(),
                 false,
@@ -102,6 +102,7 @@ class SessionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.summary.id").value("session-1"))
                 .andExpect(jsonPath("$.snapshot.messages[0].content").value("hello"))
+                .andExpect(jsonPath("$.snapshot.messages[0].seq").value(5))
                 .andExpect(jsonPath("$.snapshot.lastSeq").value(1));
     }
 
@@ -182,6 +183,49 @@ class SessionControllerTest {
                 .andExpect(status().isConflict());
 
         verify(sessionService, never()).delete("session-1");
+    }
+
+    @Test
+    void deletesTurnWithNoContentResponse() throws Exception {
+        when(sessionService.find("session-1")).thenReturn(Optional.of(SUMMARY));
+        when(runService.isRunning("session-1")).thenReturn(false);
+        when(sessionService.deleteTurn("session-1", 4L)).thenReturn(true);
+
+        mockMvc.perform(delete("/api/sessions/session-1/turns/4"))
+                .andExpect(status().isNoContent());
+
+        verify(sessionService).deleteTurn("session-1", 4L);
+    }
+
+    @Test
+    void rejectsDeletingTurnThatIsNotAUserMessage() throws Exception {
+        when(sessionService.find("session-1")).thenReturn(Optional.of(SUMMARY));
+        when(runService.isRunning("session-1")).thenReturn(false);
+        when(sessionService.deleteTurn("session-1", 4L)).thenReturn(false);
+
+        mockMvc.perform(delete("/api/sessions/session-1/turns/4"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void returnsNotFoundWhenDeletingTurnFromUnknownSession() throws Exception {
+        when(sessionService.find("missing")).thenReturn(Optional.empty());
+
+        mockMvc.perform(delete("/api/sessions/missing/turns/4"))
+                .andExpect(status().isNotFound());
+
+        verify(sessionService, never()).deleteTurn("missing", 4L);
+    }
+
+    @Test
+    void rejectsDeletingTurnDuringActiveRun() throws Exception {
+        when(sessionService.find("session-1")).thenReturn(Optional.of(SUMMARY));
+        when(runService.isRunning("session-1")).thenReturn(true);
+
+        mockMvc.perform(delete("/api/sessions/session-1/turns/4"))
+                .andExpect(status().isConflict());
+
+        verify(sessionService, never()).deleteTurn("session-1", 4L);
     }
 
     @Test

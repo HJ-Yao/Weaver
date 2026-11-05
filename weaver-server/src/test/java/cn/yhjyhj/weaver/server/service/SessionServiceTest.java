@@ -188,10 +188,72 @@ class SessionServiceTest {
         assertEquals(
                 List.of(
                         new cn.yhjyhj.weaver.core.events.SessionSnapshot.Message(
-                                SessionEvent.Role.USER, "hello"),
+                                SessionEvent.Role.USER, "hello", 1L),
                         new cn.yhjyhj.weaver.core.events.SessionSnapshot.Message(
-                                SessionEvent.Role.ASSISTANT, "echo: hello")),
+                                SessionEvent.Role.ASSISTANT, "echo: hello", 2L)),
                 snapshot.messages());
+    }
+
+    @Test
+    void deletesTurnFromUserMessageAndKeepsRawAuditEvent() {
+        SessionSummary created = service.create("Delete turn");
+        store.append(
+                created.id(),
+                new SessionEvent.MessageAdded(SessionEvent.Role.USER, "first"));
+        store.append(
+                created.id(),
+                new SessionEvent.MessageAdded(SessionEvent.Role.ASSISTANT, "first answer"));
+        long secondUserSeq = store.append(
+                created.id(),
+                new SessionEvent.MessageAdded(SessionEvent.Role.USER, "second"));
+        store.append(
+                created.id(),
+                new SessionEvent.MessageAdded(SessionEvent.Role.ASSISTANT, "second answer"));
+
+        assertTrue(service.deleteTurn(created.id(), secondUserSeq));
+
+        assertEquals(
+                List.of(
+                        new cn.yhjyhj.weaver.core.events.SessionSnapshot.Message(
+                                SessionEvent.Role.USER, "first", 1L),
+                        new cn.yhjyhj.weaver.core.events.SessionSnapshot.Message(
+                                SessionEvent.Role.ASSISTANT, "first answer", 2L)),
+                service.snapshot(created.id()).messages());
+        assertEquals(
+                new SessionEvent.TurnDeleted(secondUserSeq),
+                service.events(created.id()).getLast().event());
+        assertEquals(5L, service.snapshot(created.id()).lastSeq());
+    }
+
+    @Test
+    void doesNotDeleteTurnFromAssistantOrUnknownSequence() {
+        SessionSummary created = service.create("Reject deletes");
+        store.append(
+                created.id(),
+                new SessionEvent.MessageAdded(SessionEvent.Role.USER, "question"));
+        long assistantSeq = store.append(
+                created.id(),
+                new SessionEvent.MessageAdded(SessionEvent.Role.ASSISTANT, "answer"));
+
+        assertFalse(service.deleteTurn(created.id(), assistantSeq));
+        assertFalse(service.deleteTurn(created.id(), 999L));
+        assertFalse(service.deleteTurn("missing", 1L));
+        assertEquals(2, service.events(created.id()).size());
+    }
+
+    @Test
+    void doesNotDeleteTheSameTurnTwice() {
+        SessionSummary created = service.create("Delete once");
+        long userSeq = store.append(
+                created.id(),
+                new SessionEvent.MessageAdded(SessionEvent.Role.USER, "question"));
+        store.append(
+                created.id(),
+                new SessionEvent.MessageAdded(SessionEvent.Role.ASSISTANT, "answer"));
+
+        assertTrue(service.deleteTurn(created.id(), userSeq));
+        assertFalse(service.deleteTurn(created.id(), userSeq));
+        assertTrue(service.snapshot(created.id()).messages().isEmpty());
     }
 }
 

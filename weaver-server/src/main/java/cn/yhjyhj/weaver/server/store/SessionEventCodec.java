@@ -83,6 +83,7 @@ public final class SessionEventCodec {
             case SessionEvent.ApprovalRequested ignored -> "ApprovalRequested";
             case SessionEvent.ApprovalResolved ignored -> "ApprovalResolved";
             case SessionEvent.RunFinished ignored -> "RunFinished";
+            case SessionEvent.TurnDeleted ignored -> "TurnDeleted";
         };
     }
 
@@ -94,6 +95,7 @@ public final class SessionEventCodec {
             case "ApprovalRequested" -> SessionEvent.ApprovalRequested.class;
             case "ApprovalResolved" -> SessionEvent.ApprovalResolved.class;
             case "RunFinished" -> SessionEvent.RunFinished.class;
+            case "TurnDeleted" -> SessionEvent.TurnDeleted.class;
             default -> throw invalid("unknown session event type: " + type);
         };
     }
@@ -115,6 +117,7 @@ public final class SessionEventCodec {
                     payload, "callId", "toolName", "reversibility");
             case "ApprovalResolved" -> requireFields(payload, "callId", "approved", "reason");
             case "RunFinished" -> requireFields(payload, "aborted");
+            case "TurnDeleted" -> requirePositiveLong(payload, "fromSeq");
             default -> throw invalid("unknown session event type: " + type);
         }
     }
@@ -133,6 +136,16 @@ public final class SessionEventCodec {
             if (value == null || value.isNull()) {
                 throw invalid("missing required field: " + field);
             }
+        }
+    }
+
+    private void requirePositiveLong(ObjectNode object, String field) {
+        JsonNode value = object.get(field);
+        if (value == null
+                || !value.isIntegralNumber()
+                || !value.canConvertToLong()
+                || value.longValue() < 1L) {
+            throw invalid("field '" + field + "' must be a positive integer");
         }
     }
 

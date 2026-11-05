@@ -135,6 +135,31 @@ public class SessionController {
     }
 
     /**
+     * 从指定用户消息开始撤回该轮及其后的全部可见事件。
+     *
+     * @param id 会话标识
+     * @param seq 目标用户消息的原始事件序号
+     * @return 204 无响应体
+     * @throws ResponseStatusException 会话不存在返回 404；运行中返回 409；
+     *     序号不是可见用户消息时返回 400
+     */
+    @DeleteMapping("/{id}/turns/{seq}")
+    public ResponseEntity<Void> deleteTurn(
+            @PathVariable("id") String id,
+            @PathVariable("seq") long seq) {
+        requireSession(id);
+        if (runService.isRunning(id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "run already active: " + id);
+        }
+        if (!sessions.deleteTurn(id, seq)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "seq 不是某一轮的用户消息");
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * 向会话发送消息并以 SSE 返回运行过程。
      *
      * <p>响应中的 {@code user_message} 会转发本轮首条输入以及运行中注入的用户消息。

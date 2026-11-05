@@ -4,9 +4,9 @@ import { transcriptFromSnapshot } from './model';
 
 const snapshot: SessionSnapshotDto = {
   messages: [
-    { role: 'USER', content: 'hello' },
-    { role: 'ASSISTANT', content: 'hi' },
-    { role: 'TOOL', content: 'raw tool output' },
+    { role: 'USER', content: 'hello', seq: 1 },
+    { role: 'ASSISTANT', content: 'hi', seq: 2 },
+    { role: 'TOOL', content: 'raw tool output', seq: 3 },
   ],
   toolCalls: [
     {
@@ -34,6 +34,7 @@ describe('transcriptFromSnapshot', () => {
 
     expect(messages).toHaveLength(2);
     expect(messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(messages.map((message) => message.seq)).toEqual([1, 2]);
   });
 
   it('maps tool results onto the done/failed lifecycle', () => {

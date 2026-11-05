@@ -121,6 +121,21 @@ public final class SessionEventViewMapper {
                             null,
                             null,
                             null);
+            // 撤回事件本身不会被折叠进可见快照，只在时间线里作为审计记录出现。
+            case SessionEvent.TurnDeleted deleted ->
+                    new SessionEventView(
+                            seq,
+                            "TURN_DELETED",
+                            null,
+                            null,
+                            null,
+                            null,
+                            null,
+                            "自 seq " + deleted.fromSeq(),
+                            null,
+                            null,
+                            null,
+                            null);
         };
     }
 

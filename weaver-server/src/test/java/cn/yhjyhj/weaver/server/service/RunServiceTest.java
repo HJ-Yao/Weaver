@@ -84,9 +84,9 @@ class RunServiceTest {
         SessionSnapshot snapshot = SessionEvents.replay(store.from(summary.id(), 0L));
         assertEquals(
                 List.of(
-                        new SessionSnapshot.Message(SessionEvent.Role.USER, "hello"),
+                        new SessionSnapshot.Message(SessionEvent.Role.USER, "hello", 1),
                         new SessionSnapshot.Message(
-                                SessionEvent.Role.ASSISTANT, "echo: hello")),
+                                SessionEvent.Role.ASSISTANT, "echo: hello", 2)),
                 snapshot.messages());
         assertTrue(store.from(summary.id(), 0L).stream()
                 .map(StoredEvent::event)
@@ -267,10 +267,10 @@ class RunServiceTest {
                         "call-1", "file", true, "user")),
                 snapshot.approvals());
         assertEquals(
-                List.of(new SessionSnapshot.Message(
-                        SessionEvent.Role.ASSISTANT, "approval accepted")),
+                List.of("approval accepted"),
                 snapshot.messages().stream()
                         .filter(message -> message.role() == SessionEvent.Role.ASSISTANT)
+                        .map(SessionSnapshot.Message::content)
                         .toList());
     }
 

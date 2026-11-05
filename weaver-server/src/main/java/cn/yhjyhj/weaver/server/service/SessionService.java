@@ -1,5 +1,6 @@
 package cn.yhjyhj.weaver.server.service;
 
+import cn.yhjyhj.weaver.core.events.SessionEvent;
 import cn.yhjyhj.weaver.core.events.SessionEvents;
 import cn.yhjyhj.weaver.core.events.SessionEventStore;
 import cn.yhjyhj.weaver.core.events.SessionSnapshot;
@@ -146,6 +147,26 @@ public class SessionService {
             log.info("backfilled {} session metadata rows from event history", backfilled);
         }
         return backfilled;
+    }
+
+    /**
+     * 撤回从 fromSeq 起（含）的全部可见事件。
+     *
+     * @param sessionId 会话标识
+     * @param fromSeq 目标轮次第一条用户消息的原始事件序号
+     * @return 目标存在、可见且为 USER 消息并已追加撤回事件时返回 true
+     */
+    public boolean deleteTurn(String sessionId, long fromSeq) {
+        boolean targetsUserMessage = SessionEvents.visible(events.from(sessionId, 0L))
+                .stream()
+                .anyMatch(stored -> stored.seq() == fromSeq
+                        && stored.event() instanceof SessionEvent.MessageAdded message
+                        && message.role() == SessionEvent.Role.USER);
+        if (!targetsUserMessage) {
+            return false;
+        }
+        events.append(sessionId, new SessionEvent.TurnDeleted(fromSeq));
+        return true;
     }
 
     /**

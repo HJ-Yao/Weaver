@@ -151,4 +151,31 @@ class SessionModelHistoryReplayTest {
                 new ModelMessage.Assistant("finished", List.of())),
                 history);
     }
+
+    @Test
+    void replayModelHistoryOmitsMessagesFromDeletedTurn() {
+        var events = List.of(
+                new StoredEvent(1L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.USER, "first question")),
+                new StoredEvent(2L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "first answer")),
+                new StoredEvent(3L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.USER, "second question")),
+                new StoredEvent(4L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "checking")),
+                new StoredEvent(5L, new SessionEvent.ToolCallStarted(
+                        "call-second", "file", "{\"path\":\"a.txt\"}")),
+                new StoredEvent(6L, new SessionEvent.ToolCallCompleted(
+                        "call-second", new ToolResult("second output", false, 2L))),
+                new StoredEvent(7L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "second answer")),
+                new StoredEvent(8L, new SessionEvent.TurnDeleted(3L)));
+
+        List<ModelMessage> history = SessionEvents.replayModelHistory(events);
+
+        assertEquals(List.of(
+                new ModelMessage.User("first question"),
+                new ModelMessage.Assistant("first answer", List.of())),
+                history);
+    }
 }

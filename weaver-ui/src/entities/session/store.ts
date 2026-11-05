@@ -50,6 +50,8 @@ interface SessionState {
   renameSession: (id: string, title: string) => Promise<boolean>;
   /** 删除会话；删除当前会话时自动选择列表中的下一项。 */
   deleteSession: (id: string) => Promise<boolean>;
+  /** 删除从指定序号开始的那一轮及之后；成功后重新加载当前会话。 */
+  deleteTurn: (seq: number) => Promise<boolean>;
   sendMessage: (content: string) => void;
   /** 运行中投递一条输入；成功返回 `true`。没有活动运行时返回 `false`，由界面提示。 */
   enqueueMessage: (content: string, target: InboxTargetDto) => Promise<boolean>;
@@ -372,6 +374,19 @@ export const useSessionStore = create<SessionState>()((set, get) => {
         set({ status: 'ready', error: null });
       }
       return true;
+    },
+
+    deleteTurn: async (seq) => {
+      const sessionId = get().activeSessionId;
+      if (!sessionId || get().running) return false;
+
+      try {
+        await sessionApi.deleteTurn(sessionId, seq);
+        await get().selectSession(sessionId);
+        return true;
+      } catch {
+        return false;
+      }
     },
 
     sendMessage: (content) => {

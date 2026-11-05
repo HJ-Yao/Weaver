@@ -11,7 +11,8 @@ import cn.yhjyhj.weaver.core.tool.Reversibility;
 public sealed interface SessionEvent
         permits SessionEvent.MessageAdded, SessionEvent.ToolCallStarted,
                 SessionEvent.ToolCallCompleted, SessionEvent.ApprovalRequested,
-                SessionEvent.ApprovalResolved, SessionEvent.RunFinished {
+                SessionEvent.ApprovalResolved, SessionEvent.RunFinished,
+                SessionEvent.TurnDeleted {
 
     /** 消息角色。 */
     enum Role {
@@ -55,4 +56,7 @@ public sealed interface SessionEvent
 
     /** 一次运行结束；aborted 为 true 表示被中止而非自然结束。 */
     record RunFinished(boolean aborted) implements SessionEvent {}
+
+    /** 撤回从 fromSeq 起（含）的全部可见事件；自身不可见。 */
+    record TurnDeleted(long fromSeq) implements SessionEvent {}
 }

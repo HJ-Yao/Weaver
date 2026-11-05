@@ -24,7 +24,8 @@ class SessionEventCodecTest {
                 new SessionEvent.ApprovalRequested(
                         "call-1", "shell", Reversibility.RECOVERABLE),
                 new SessionEvent.ApprovalResolved("call-1", true, "user"),
-                new SessionEvent.RunFinished(true));
+                new SessionEvent.RunFinished(true),
+                new SessionEvent.TurnDeleted(7L));
 
         for (SessionEvent event : events) {
             assertEquals(event, codec.decode(codec.encode(event)));
@@ -56,5 +57,18 @@ class SessionEventCodecTest {
                 () -> codec.decode(
                         "{\"type\":\"ApprovalRequested\",\"callId\":\"call-1\","
                                 + "\"toolName\":\"shell\",\"reversibility\":\"UNKNOWN\"}"));
+    }
+
+    @Test
+    void rejectsMissingOrInvalidTurnDeletedFromSeq() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> codec.decode("{\"type\":\"TurnDeleted\"}"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> codec.decode("{\"type\":\"TurnDeleted\",\"fromSeq\":\"7\"}"));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> codec.decode("{\"type\":\"TurnDeleted\",\"fromSeq\":0}"));
     }
 }

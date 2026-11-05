@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useUiStore } from '@/app/ui-store';
 import { useSessionStore } from '@/entities/session/store';
 import type { MessageItem } from '@/entities/session/model';
 import { ApprovalCard } from '@/features/approval/ApprovalCard';
@@ -14,6 +15,9 @@ import styles from './MessageStream.module.css';
  */
 export function MessageStream() {
   const transcript = useSessionStore((state) => state.transcript);
+  const running = useSessionStore((state) => state.running);
+  const deleteTurn = useSessionStore((state) => state.deleteTurn);
+  const showToast = useUiStore((state) => state.showToast);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -32,7 +36,15 @@ export function MessageStream() {
       {transcript.map((item) => {
         // 工具与审批共用同一个 callId，因此 React key 必须带上类型前缀。
         if (item.kind === 'message') {
-          return <MessageBubble key={`message-${item.id}`} item={item} />;
+          return (
+            <MessageBubble
+              key={`message-${item.id}`}
+              item={item}
+              running={running}
+              deleteTurn={deleteTurn}
+              showToast={showToast}
+            />
+          );
         }
         if (item.kind === 'tool') return <ToolCard key={`tool-${item.id}`} item={item} />;
         return <ApprovalCard key={`approval-${item.id}`} item={item} />;
@@ -41,14 +53,56 @@ export function MessageStream() {
   );
 }
 
-function MessageBubble({ item }: { item: MessageItem }) {
+interface MessageBubbleProps {
+  item: MessageItem;
+  running: boolean;
+  deleteTurn: (seq: number) => Promise<boolean>;
+  showToast: (message: string) => void;
+}
+
+function MessageBubble({ item, running, deleteTurn, showToast }: MessageBubbleProps) {
   const isUser = item.role === 'user';
+  const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => {
+    if (!confirming) return;
+    const timer = window.setTimeout(() => setConfirming(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [confirming]);
+
+  const handleDelete = () => {
+    if (item.seq === undefined) return;
+    if (!confirming) {
+      setConfirming(true);
+      return;
+    }
+
+    setConfirming(false);
+    void deleteTurn(item.seq)
+      .then((deleted) => {
+        if (!deleted) showToast('删除失败：请先停止当前运行');
+      })
+      .catch(() => showToast('删除失败：请先停止当前运行'));
+  };
+
   return (
-    <article className={`${styles.message} ${isUser ? styles.user : styles.assistant}`}>
+    <article
+      className={`${styles.message} ${isUser ? styles.user : styles.assistant}`}
+      title={item.seq === undefined ? undefined : `seq ${item.seq}`}
+    >
+      {isUser && item.seq !== undefined && !running && (
+        <button
+          type="button"
+          className={styles.deleteButton}
+          onClick={handleDelete}
+          aria-label={confirming ? '确认删除' : '删除这一轮及之后'}
+        >
+          {confirming ? '确认删除' : '删除这一轮及之后'}
+        </button>
+      )}
       {!isUser && (
         <div className={styles.head}>
           <span>Weaver</span>
-          {item.seq !== undefined && <span className={styles.seq}>seq {item.seq}</span>}
         </div>
       )}
       <div className={`${styles.bubble} ${item.streaming ? styles.streaming : ''}`}>

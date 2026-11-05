@@ -21,6 +21,7 @@ export interface SessionSummaryDto {
 export interface SessionMessageDto {
   role: MessageRoleDto;
   content: string;
+  seq: number;
 }
 
 /** `cn.yhjyhj.weaver.core.events.ToolResult` */
@@ -72,7 +73,8 @@ export interface SessionEventDto {
     | 'TOOL_COMPLETED'
     | 'APPROVAL_REQUESTED'
     | 'APPROVAL_RESOLVED'
-    | 'RUN_FINISHED';
+    | 'RUN_FINISHED'
+    | 'TURN_DELETED';
   role: string | null;
   toolName: string | null;
   callId: string | null;
@@ -119,6 +121,13 @@ export const sessionApi = {
   /** DELETE /sessions/{id}：删除会话。 */
   remove: (id: string) =>
     request<void>(`/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  /** DELETE /sessions/{id}/turns/{seq}：撤回该用户轮及之后的消息。 */
+  deleteTurn: (sessionId: string, seq: number) =>
+    request<void>(
+      `/sessions/${encodeURIComponent(sessionId)}/turns/${encodeURIComponent(seq)}`,
+      { method: 'DELETE' },
+    ),
 
   /** PATCH /sessions/{id}：修改标题。 */
   rename: (id: string, title: string) =>

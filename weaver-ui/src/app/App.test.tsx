@@ -65,8 +65,8 @@ const loadedDetail: SessionDetailDto = {
   summary: loadedSession,
   snapshot: {
     messages: [
-      { role: 'USER', content: '从后端加载的问题' },
-      { role: 'ASSISTANT', content: '从后端加载的回答' },
+      { role: 'USER', content: '从后端加载的问题', seq: 1 },
+      { role: 'ASSISTANT', content: '从后端加载的回答', seq: 2 },
     ],
     toolCalls: [],
     approvals: [],

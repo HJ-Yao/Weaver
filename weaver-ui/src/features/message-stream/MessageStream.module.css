@@ -14,6 +14,7 @@
 }
 
 .user {
+  position: relative;
   align-self: flex-end;
   align-items: flex-end;
 }
@@ -31,8 +32,33 @@
   color: var(--faint);
 }
 
-.seq {
-  font-family: var(--font-mono);
+.deleteButton {
+  position: absolute;
+  top: 0;
+  right: calc(100% + var(--space-2));
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--faint);
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.user:hover .deleteButton,
+.deleteButton:focus-visible {
+  opacity: 1;
+}
+
+.deleteButton:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
 }
 
 .bubble {

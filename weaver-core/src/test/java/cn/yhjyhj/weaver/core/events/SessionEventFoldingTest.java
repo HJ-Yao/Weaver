@@ -50,8 +50,8 @@ class SessionEventFoldingTest {
         var snapshot = SessionEvents.replay(events);
 
         assertEquals(List.of(
-                new SessionSnapshot.Message(SessionEvent.Role.USER, "read file"),
-                new SessionSnapshot.Message(SessionEvent.Role.TOOL, "ok")),
+                new SessionSnapshot.Message(SessionEvent.Role.USER, "read file", 1L),
+                new SessionSnapshot.Message(SessionEvent.Role.TOOL, "ok", 3L)),
                 snapshot.messages());
     }
 
@@ -147,7 +147,7 @@ class SessionEventFoldingTest {
                 "status",
                 new ToolResult("ok", false, 3L))), snapshot.toolCalls());
         assertEquals(
-                new SessionSnapshot.Message(SessionEvent.Role.TOOL, "ok"),
+                new SessionSnapshot.Message(SessionEvent.Role.TOOL, "ok", 4L),
                 snapshot.messages().getFirst());
     }
 
@@ -200,5 +200,82 @@ class SessionEventFoldingTest {
                 new StoredEvent(1L, new SessionEvent.MessageAdded(SessionEvent.Role.USER, "a")),
                 new StoredEvent(3L, new SessionEvent.MessageAdded(SessionEvent.Role.ASSISTANT, "b")));
         assertEquals(3L, SessionEvents.replay(events).lastSeq());
+    }
+
+    @Test
+    void replayOmitsDeletedTurnToolsAndApprovals() {
+        var events = List.of(
+                new StoredEvent(1L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.USER, "first question")),
+                new StoredEvent(2L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "first answer")),
+                new StoredEvent(3L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.USER, "second question")),
+                new StoredEvent(4L, new SessionEvent.ToolCallStarted(
+                        "call-second", "shell", "{\"command\":\"pwd\"}")),
+                new StoredEvent(5L, new SessionEvent.ApprovalRequested(
+                        "call-second", "shell", Reversibility.RECOVERABLE)),
+                new StoredEvent(6L, new SessionEvent.ApprovalResolved(
+                        "call-second", true, "user")),
+                new StoredEvent(7L, new SessionEvent.ToolCallCompleted(
+                        "call-second", new ToolResult("/workspace", false, 4L))),
+                new StoredEvent(8L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "second answer")),
+                new StoredEvent(9L, new SessionEvent.RunFinished(false)),
+                new StoredEvent(10L, new SessionEvent.TurnDeleted(3L)));
+
+        var snapshot = SessionEvents.replay(events);
+
+        assertEquals(List.of(
+                new SessionSnapshot.Message(SessionEvent.Role.USER, "first question", 1L),
+                new SessionSnapshot.Message(SessionEvent.Role.ASSISTANT, "first answer", 2L)),
+                snapshot.messages());
+        assertTrue(snapshot.toolCalls().isEmpty());
+        assertTrue(snapshot.approvals().isEmpty());
+        assertEquals(10L, snapshot.lastSeq());
+    }
+
+    @Test
+    void replayAppliesMultipleDeletesInEventOrder() {
+        var events = List.of(
+                new StoredEvent(1L, new SessionEvent.MessageAdded(SessionEvent.Role.USER, "one")),
+                new StoredEvent(2L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "one answer")),
+                new StoredEvent(3L, new SessionEvent.MessageAdded(SessionEvent.Role.USER, "two")),
+                new StoredEvent(4L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "two answer")),
+                new StoredEvent(5L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.USER, "three")),
+                new StoredEvent(6L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "three answer")),
+                new StoredEvent(7L, new SessionEvent.TurnDeleted(5L)),
+                new StoredEvent(8L, new SessionEvent.TurnDeleted(3L)));
+
+        var snapshot = SessionEvents.replay(events);
+
+        assertEquals(List.of(
+                new SessionSnapshot.Message(SessionEvent.Role.USER, "one", 1L),
+                new SessionSnapshot.Message(SessionEvent.Role.ASSISTANT, "one answer", 2L)),
+                snapshot.messages());
+        assertEquals(8L, snapshot.lastSeq());
+    }
+
+    @Test
+    void replayKeepsEventsAppendedAfterDeleteVisible() {
+        var events = List.of(
+                new StoredEvent(1L, new SessionEvent.MessageAdded(SessionEvent.Role.USER, "old")),
+                new StoredEvent(2L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "old answer")),
+                new StoredEvent(3L, new SessionEvent.TurnDeleted(1L)),
+                new StoredEvent(4L, new SessionEvent.MessageAdded(SessionEvent.Role.USER, "new")),
+                new StoredEvent(5L, new SessionEvent.MessageAdded(
+                        SessionEvent.Role.ASSISTANT, "new answer")));
+
+        var snapshot = SessionEvents.replay(events);
+
+        assertEquals(List.of(
+                new SessionSnapshot.Message(SessionEvent.Role.USER, "new", 4L),
+                new SessionSnapshot.Message(SessionEvent.Role.ASSISTANT, "new answer", 5L)),
+                snapshot.messages());
     }
 }

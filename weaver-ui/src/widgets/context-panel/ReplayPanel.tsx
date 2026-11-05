@@ -306,6 +306,8 @@ function eventLabel(event: SessionEventDto, toolNames: Map<string, string>): str
       }`;
     case 'RUN_FINISHED':
       return `运行结束 · ${event.aborted ? '已中止' : '完成'}`;
+    case 'TURN_DELETED':
+      return `撤回对话 · ${event.content ?? '范围未知'}`;
   }
 }
 
@@ -328,6 +330,10 @@ function eventDetail(event: SessionEventDto): EventDetail | null {
     case 'APPROVAL_REQUESTED':
     case 'RUN_FINISHED':
       return null;
+    case 'TURN_DELETED':
+      return event.content == null
+        ? null
+        : { label: '撤回范围', content: event.content };
   }
 }
 
