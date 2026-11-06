@@ -128,7 +128,7 @@ public final class StdioTransport implements McpTransport {
     private void readStdout() {
         Throwable failure = null;
         ByteArrayOutputStream line = new ByteArrayOutputStream();
-        // 逐字节扫描换行，必须加缓冲；直接读进程流时每个字节都是一次系统调用。
+        // 逐字节扫描换行；显式包一层缓冲，不依赖 JDK 对进程流是否已缓冲的实现细节。
         try (var reader = new BufferedInputStream(process.getInputStream())) {
             int value;
             while ((value = reader.read()) != -1) {
